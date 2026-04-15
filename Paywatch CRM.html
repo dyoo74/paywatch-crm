@@ -1,0 +1,2223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#1CE6B0">
+<title>Paywatch CRM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.4/dist/tesseract.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    /* Paywatch Brand */
+    --pw-green: #1CE6B0;
+    --pw-green-dark: #15c99a;
+    --pw-green-light: #C9F9EC;
+    --pw-mint: #E8FDF6;
+    --pw-navy: #000E41;
+    --pw-navy-soft: #1a2757;
+    --pw-yellow: #FFCE00;
+    --pw-yellow-soft: #FFF8D6;
+
+    /* Neutrals */
+    --bg: #ffffff;
+    --bg-soft: #f8fafc;
+    --bg-card: #ffffff;
+    --bg-hover: #f1f5f9;
+    --border: #e2e8f0;
+    --border-strong: #cbd5e1;
+    --text: #000E41;
+    --text-body: #334155;
+    --text-dim: #64748b;
+    --text-muted: #94a3b8;
+
+    /* Status */
+    --red: #ef4444;
+    --red-soft: #fee2e2;
+    --orange: #f97316;
+    --orange-soft: #ffedd5;
+    --blue: #3b82f6;
+    --blue-soft: #dbeafe;
+
+    --shadow-sm: 0 1px 2px rgba(0,14,65,0.05);
+    --shadow: 0 2px 8px rgba(0,14,65,0.06), 0 1px 3px rgba(0,14,65,0.04);
+    --shadow-lg: 0 10px 30px rgba(0,14,65,0.08), 0 2px 8px rgba(0,14,65,0.04);
+    --shadow-green: 0 4px 14px rgba(28,230,176,0.25);
+
+    --radius: 14px;
+    --radius-sm: 10px;
+    --radius-lg: 20px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg-soft);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.5;
+  }
+
+  /* ===== LAYOUT ===== */
+  .app-shell { display: flex; min-height: 100vh; }
+
+  /* SIDEBAR (desktop) */
+  .sidebar {
+    width: 240px; flex-shrink: 0;
+    background: var(--bg-card);
+    border-right: 1px solid var(--border);
+    padding: 20px 14px;
+    display: flex; flex-direction: column;
+    position: sticky; top: 0; height: 100vh;
+    overflow-y: auto;
+  }
+  .sidebar-logo {
+    padding: 0 8px 24px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 16px;
+  }
+  .nav-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 11px 14px; margin-bottom: 3px;
+    border-radius: var(--radius-sm);
+    cursor: pointer; transition: all 0.15s;
+    color: var(--text-dim);
+    font-weight: 600; font-size: 14px;
+    border: none; background: none; width: 100%; text-align: left;
+    font-family: inherit;
+  }
+  .nav-item:hover { background: var(--bg-hover); color: var(--text); }
+  .nav-item.active {
+    background: var(--pw-green);
+    color: var(--pw-navy);
+    box-shadow: var(--shadow-green);
+  }
+  .nav-item .icon {
+    width: 20px; height: 20px; display: inline-flex;
+    align-items: center; justify-content: center;
+    font-size: 18px;
+  }
+  .nav-item .badge {
+    margin-left: auto;
+    background: var(--pw-yellow);
+    color: var(--pw-navy);
+    font-size: 10px; font-weight: 800;
+    padding: 2px 7px; border-radius: 10px;
+  }
+  .nav-item.active .badge { background: var(--pw-navy); color: var(--pw-yellow); }
+
+  .sidebar-bottom {
+    margin-top: auto; padding-top: 16px;
+    border-top: 1px solid var(--border);
+    font-size: 11px; color: var(--text-muted);
+    text-align: center;
+  }
+
+  /* MAIN CONTENT */
+  .main-content {
+    flex: 1; min-width: 0;
+    padding: 28px 36px;
+    max-width: 100%;
+  }
+
+  /* TOP BAR (mobile only) */
+  .mobile-topbar {
+    display: none;
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(255,255,255,0.95);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 16px;
+    align-items: center; justify-content: space-between;
+  }
+  .mobile-menu-btn {
+    width: 40px; height: 40px; border-radius: 10px;
+    border: 1px solid var(--border); background: var(--bg-card);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 20px;
+  }
+  .mobile-drawer-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,14,65,0.4); z-index: 199;
+  }
+  .mobile-drawer-overlay.show { display: block; }
+
+  /* PAGE HEADER */
+  .page-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 24px; flex-wrap: wrap; gap: 12px;
+  }
+  .page-title { font-size: 26px; font-weight: 800; color: var(--text); letter-spacing: -0.5px; }
+  .page-subtitle { font-size: 14px; color: var(--text-dim); margin-top: 2px; }
+
+  /* ===== VIEWS ===== */
+  .view { display: none; }
+  .view.active { display: block; animation: fadeIn 0.3s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* ===== CARDS ===== */
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+  }
+  .card-pad { padding: 24px; }
+  .card-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 10px;
+  }
+  .card-header h3 { font-size: 16px; font-weight: 700; color: var(--text); }
+  .card-body { padding: 20px; }
+
+  /* ===== FORMS ===== */
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .form-group { display: flex; flex-direction: column; gap: 6px; }
+  .form-group.full { grid-column: 1 / -1; }
+  .form-group label {
+    font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.8px;
+    color: var(--text-dim);
+  }
+  .form-group input, .form-group select, .form-group textarea {
+    padding: 12px 14px;
+    background: var(--bg-card);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-size: 14px;
+    transition: all 0.15s;
+    outline: none;
+    font-family: inherit;
+  }
+  .form-group input::placeholder, .form-group textarea::placeholder { color: var(--text-muted); }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+    border-color: var(--pw-green);
+    box-shadow: 0 0 0 3px rgba(28,230,176,0.15);
+  }
+  .form-group textarea { resize: vertical; min-height: 80px; }
+
+  /* Stage chips */
+  .stage-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    padding: 8px 14px; border-radius: 20px;
+    font-size: 12px; font-weight: 600;
+    cursor: pointer; transition: all 0.15s;
+    border: 1.5px solid var(--border);
+    background: var(--bg-card); color: var(--text-dim);
+    font-family: inherit;
+  }
+  .chip:hover { border-color: var(--border-strong); color: var(--text); }
+  .chip.active { border-color: var(--pw-green); background: var(--pw-green); color: var(--pw-navy); font-weight: 700; }
+
+  /* ===== BUTTONS ===== */
+  .btn {
+    padding: 11px 20px; border-radius: var(--radius-sm);
+    font-size: 14px; font-weight: 600;
+    cursor: pointer; transition: all 0.15s;
+    border: none; display: inline-flex; align-items: center; gap: 8px;
+    font-family: inherit;
+  }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-primary {
+    background: var(--pw-green); color: var(--pw-navy);
+    font-weight: 700;
+    box-shadow: var(--shadow-green);
+  }
+  .btn-primary:hover { background: var(--pw-green-dark); transform: translateY(-1px); box-shadow: 0 6px 18px rgba(28,230,176,0.35); }
+  .btn-secondary {
+    background: var(--bg-card); color: var(--text);
+    border: 1.5px solid var(--border);
+  }
+  .btn-secondary:hover { background: var(--bg-hover); border-color: var(--border-strong); }
+  .btn-navy { background: var(--pw-navy); color: var(--pw-green); font-weight: 700; }
+  .btn-navy:hover { background: var(--pw-navy-soft); }
+  .btn-danger { background: var(--red); color: white; }
+  .btn-danger:hover { background: #dc2626; }
+  .btn-sm { padding: 8px 14px; font-size: 12px; }
+  .btn-icon { width: 38px; height: 38px; padding: 0; justify-content: center; }
+
+  /* ===== DASHBOARD ===== */
+  .stats-grid {
+    display: grid; gap: 14px;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    margin-bottom: 24px;
+  }
+  .stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    box-shadow: var(--shadow-sm);
+    position: relative; overflow: hidden;
+  }
+  .stat-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: var(--pw-green);
+  }
+  .stat-card.navy::before { background: var(--pw-navy); }
+  .stat-card.yellow::before { background: var(--pw-yellow); }
+  .stat-card.mint::before { background: var(--pw-green-light); }
+  .stat-card .label {
+    font-size: 11px; font-weight: 700; color: var(--text-dim);
+    text-transform: uppercase; letter-spacing: 0.8px;
+  }
+  .stat-card .value {
+    font-size: 32px; font-weight: 800; color: var(--text);
+    margin-top: 4px; letter-spacing: -1px; line-height: 1.1;
+  }
+  .stat-card .trend {
+    font-size: 12px; color: var(--text-dim); margin-top: 4px;
+  }
+  .stat-card .trend.up { color: #059669; }
+  .stat-card .trend.down { color: var(--red); }
+
+  /* ===== ALERTS / REMINDERS ===== */
+  .alerts-grid {
+    display: grid; gap: 14px;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    margin-bottom: 24px;
+  }
+  .alert-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--pw-yellow);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    box-shadow: var(--shadow-sm);
+  }
+  .alert-card.urgent { border-left-color: var(--red); }
+  .alert-card.info { border-left-color: var(--blue); }
+  .alert-card.success { border-left-color: var(--pw-green); }
+  .alert-card h4 {
+    font-size: 13px; font-weight: 700; color: var(--text);
+    display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+  }
+  .alert-card h4 .alert-count {
+    background: var(--red); color: white;
+    font-size: 10px; font-weight: 800;
+    padding: 2px 8px; border-radius: 10px;
+  }
+  .alert-card.info h4 .alert-count { background: var(--blue); }
+  .alert-card.success h4 .alert-count { background: var(--pw-green); color: var(--pw-navy); }
+  .alert-list { list-style: none; }
+  .alert-list li {
+    padding: 8px 0; border-bottom: 1px dashed var(--border);
+    font-size: 13px; cursor: pointer;
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  }
+  .alert-list li:last-child { border-bottom: none; }
+  .alert-list li:hover { color: var(--pw-green-dark); }
+  .alert-list .alert-meta { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+  .alert-empty { font-size: 13px; color: var(--text-muted); padding: 10px 0; }
+
+  /* ===== KANBAN ===== */
+  .kanban {
+    display: flex; gap: 14px; overflow-x: auto;
+    padding-bottom: 14px; margin: 0 -4px;
+    scroll-snap-type: x mandatory;
+  }
+  .kanban::-webkit-scrollbar { height: 8px; }
+  .kanban-col {
+    min-width: 280px; max-width: 320px; flex-shrink: 0;
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    display: flex; flex-direction: column;
+    max-height: 650px; scroll-snap-align: start;
+  }
+  .kanban-col-header {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--bg-card);
+    border-radius: var(--radius) var(--radius) 0 0;
+  }
+  .kanban-col-header .col-title {
+    font-size: 13px; font-weight: 700; color: var(--text);
+  }
+  .kanban-col-header .col-meta {
+    display: flex; align-items: center; gap: 8px;
+  }
+  .col-count {
+    background: var(--bg-hover); padding: 2px 9px; border-radius: 10px;
+    font-size: 11px; font-weight: 700; color: var(--text-dim);
+  }
+  .kanban-col-body {
+    padding: 10px; overflow-y: auto; flex: 1;
+  }
+  .kanban-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 12px 14px; margin-bottom: 8px;
+    cursor: pointer; transition: all 0.15s;
+    box-shadow: var(--shadow-sm);
+  }
+  .kanban-card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-color: var(--pw-green); }
+  .kanban-card .card-company {
+    font-weight: 700; font-size: 14px; color: var(--text); margin-bottom: 4px;
+  }
+  .kanban-card .card-meta {
+    font-size: 11px; color: var(--pw-green-dark); font-weight: 600; margin-bottom: 6px;
+  }
+  .kanban-card .card-contact {
+    font-size: 12px; color: var(--text-dim);
+  }
+  .kanban-card .card-tags {
+    display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap;
+  }
+  .tag {
+    font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 10px;
+    background: var(--pw-mint); color: var(--pw-navy);
+  }
+  .tag.warn { background: var(--pw-yellow-soft); color: #854d0e; }
+  .tag.danger { background: var(--red-soft); color: var(--red); }
+  .tag.info { background: var(--blue-soft); color: var(--blue); }
+
+  /* ===== TABLE ===== */
+  .table-wrapper { overflow-x: auto; background: var(--bg-card); border-radius: var(--radius); border: 1px solid var(--border); }
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    padding: 14px 16px; text-align: left;
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.8px; color: var(--text-dim);
+    background: var(--bg-soft);
+    white-space: nowrap; cursor: pointer; user-select: none;
+    border-bottom: 1px solid var(--border);
+  }
+  th:hover { color: var(--text); }
+  td {
+    padding: 14px 16px; font-size: 13px; color: var(--text-body);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--pw-mint); }
+  .stage-badge {
+    padding: 4px 10px; border-radius: 12px;
+    font-size: 11px; font-weight: 700; display: inline-block;
+    white-space: nowrap;
+  }
+  .stage-badge.prospect { background: #e2e8f0; color: #475569; }
+  .stage-badge.initial-contact { background: var(--blue-soft); color: var(--blue); }
+  .stage-badge.qualified-lead { background: #ddd6fe; color: #7c3aed; }
+  .stage-badge.negotiation { background: var(--pw-yellow-soft); color: #a16207; }
+  .stage-badge.awaiting { background: var(--orange-soft); color: #c2410c; }
+  .stage-badge.onboarded { background: #dcfce7; color: #15803d; }
+  .stage-badge.lost { background: var(--red-soft); color: var(--red); }
+
+  .row-actions { display: flex; gap: 4px; }
+  .icon-btn {
+    width: 30px; height: 30px; border-radius: 7px;
+    border: 1px solid var(--border); background: var(--bg-card);
+    color: var(--text-dim); cursor: pointer; display: inline-flex;
+    align-items: center; justify-content: center; font-size: 13px;
+    transition: all 0.15s;
+  }
+  .icon-btn:hover { background: var(--pw-green); color: var(--pw-navy); border-color: var(--pw-green); }
+  .icon-btn.danger:hover { background: var(--red); color: white; border-color: var(--red); }
+
+  /* ===== SEARCH BAR ===== */
+  .search-box {
+    padding: 10px 14px 10px 38px; border: 1.5px solid var(--border);
+    border-radius: var(--radius-sm); background: var(--bg-card);
+    font-size: 13px; outline: none; width: 260px; max-width: 100%;
+    font-family: inherit;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='8'/><line x1='21' y1='21' x2='16.65' y2='16.65'/></svg>");
+    background-repeat: no-repeat; background-position: 12px center;
+  }
+  .search-box:focus { border-color: var(--pw-green); box-shadow: 0 0 0 3px rgba(28,230,176,0.15); }
+
+  /* ===== FILTER / PICK CHIPS ===== */
+  .filter-row {
+    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+    margin-bottom: 18px;
+  }
+
+  /* ===== CLIENT DETAIL ===== */
+  .client-detail-grid {
+    display: grid; gap: 20px;
+    grid-template-columns: 1.2fr 1fr;
+  }
+  .client-header-card {
+    padding: 24px;
+    background: linear-gradient(135deg, var(--pw-mint), var(--pw-green-light));
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--pw-green-light);
+    margin-bottom: 20px;
+  }
+  .client-header-card h2 {
+    font-size: 28px; font-weight: 800; color: var(--pw-navy); margin-bottom: 4px;
+  }
+  .client-header-card .meta {
+    color: var(--pw-navy); opacity: 0.7; font-size: 14px;
+  }
+  .client-header-actions { margin-top: 16px; display: flex; gap: 10px; flex-wrap: wrap; }
+
+  .info-row {
+    display: flex; padding: 10px 0; border-bottom: 1px dashed var(--border);
+    font-size: 14px;
+  }
+  .info-row:last-child { border-bottom: none; }
+  .info-label { flex: 0 0 130px; color: var(--text-dim); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+  .info-value { flex: 1; color: var(--text); }
+
+  /* Activity timeline */
+  .timeline { position: relative; padding-left: 24px; }
+  .timeline::before {
+    content: ''; position: absolute; left: 7px; top: 4px; bottom: 4px;
+    width: 2px; background: var(--border);
+  }
+  .timeline-item { position: relative; padding-bottom: 16px; }
+  .timeline-item::before {
+    content: ''; position: absolute; left: -21px; top: 6px;
+    width: 12px; height: 12px; border-radius: 50%;
+    background: var(--pw-green); border: 2px solid var(--bg-card);
+    box-shadow: 0 0 0 2px var(--pw-green);
+  }
+  .timeline-item .tl-date { font-size: 11px; color: var(--text-muted); font-weight: 600; }
+  .timeline-item .tl-text { font-size: 13px; color: var(--text); margin-top: 2px; }
+
+  /* ===== ONBOARDING CHECKLIST ===== */
+  .onb-section { margin-bottom: 28px; }
+  .onb-section-title {
+    font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--text-dim); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;
+  }
+  .onb-section-title::after {
+    content: ''; flex: 1; height: 1px; background: var(--border);
+  }
+  .onb-step {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 16px;
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); margin-bottom: 8px;
+    transition: all 0.15s;
+  }
+  .onb-step:hover { border-color: var(--pw-green); }
+  .onb-step.done { background: var(--pw-mint); border-color: var(--pw-green-light); }
+  .onb-check {
+    width: 26px; height: 26px; border-radius: 50%;
+    border: 2px solid var(--border-strong); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; transition: all 0.15s; font-weight: 900;
+  }
+  .onb-check:hover { border-color: var(--pw-green); }
+  .onb-check.done { background: var(--pw-green); border-color: var(--pw-green); color: var(--pw-navy); }
+  .onb-step .onb-label { flex: 1; font-size: 14px; font-weight: 500; }
+  .onb-step.done .onb-label { text-decoration: line-through; color: var(--text-dim); }
+  .onb-step .onb-meta { font-size: 11px; color: var(--text-muted); }
+  .onb-progress-bar {
+    height: 8px; background: var(--bg-hover); border-radius: 4px; overflow: hidden;
+    margin-bottom: 6px;
+  }
+  .onb-progress-fill {
+    height: 100%; background: linear-gradient(90deg, var(--pw-green), var(--pw-green-dark));
+    border-radius: 4px; transition: width 0.3s;
+  }
+
+  /* ===== OCR SCANNER ===== */
+  .scan-hero {
+    background: linear-gradient(135deg, var(--pw-navy), #001a5e);
+    border-radius: var(--radius-lg);
+    padding: 40px 32px; color: white; text-align: center;
+    margin-bottom: 24px;
+    position: relative; overflow: hidden;
+  }
+  .scan-hero::before {
+    content: ''; position: absolute; top: -50px; right: -50px;
+    width: 180px; height: 180px; border-radius: 50%;
+    background: var(--pw-green); opacity: 0.15;
+  }
+  .scan-hero::after {
+    content: ''; position: absolute; bottom: -80px; left: -40px;
+    width: 200px; height: 200px; border-radius: 50%;
+    background: var(--pw-yellow); opacity: 0.08;
+  }
+  .scan-hero h2 { color: var(--pw-green); font-size: 24px; margin-bottom: 6px; position: relative; z-index: 1; }
+  .scan-hero p { opacity: 0.8; font-size: 14px; position: relative; z-index: 1; }
+
+  .scan-zone {
+    border: 2.5px dashed var(--pw-green);
+    border-radius: var(--radius);
+    padding: 50px 20px; text-align: center;
+    background: var(--pw-mint);
+    cursor: pointer; transition: all 0.15s;
+  }
+  .scan-zone:hover { background: var(--pw-green-light); border-color: var(--pw-green-dark); }
+  .scan-zone.dragover { background: var(--pw-green-light); transform: scale(1.02); }
+  .scan-zone-icon { font-size: 50px; margin-bottom: 14px; }
+  .scan-zone-label { font-size: 18px; font-weight: 700; color: var(--pw-navy); }
+  .scan-zone-hint { font-size: 13px; color: var(--text-dim); margin-top: 6px; }
+
+  .scan-actions { display: flex; gap: 10px; justify-content: center; margin-top: 20px; flex-wrap: wrap; }
+
+  .scan-preview {
+    margin-top: 24px; padding: 20px;
+    background: var(--bg-card); border-radius: var(--radius);
+    border: 1px solid var(--border);
+    display: none;
+  }
+  .scan-preview.show { display: block; }
+  .scan-preview img {
+    max-width: 100%; max-height: 300px;
+    border-radius: var(--radius-sm);
+    display: block; margin: 0 auto 16px;
+  }
+  .scan-progress {
+    height: 6px; background: var(--bg-hover); border-radius: 3px;
+    overflow: hidden; margin-bottom: 12px;
+  }
+  .scan-progress-fill { height: 100%; background: var(--pw-green); border-radius: 3px; transition: width 0.3s; width: 0%; }
+  .scan-status { font-size: 13px; color: var(--text-dim); text-align: center; }
+  .scan-extracted {
+    background: var(--bg-soft); padding: 14px; border-radius: var(--radius-sm);
+    margin-top: 12px; font-size: 13px; white-space: pre-wrap;
+    max-height: 200px; overflow-y: auto;
+    border: 1px solid var(--border);
+  }
+
+  /* ===== MODAL ===== */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,14,65,0.5);
+    backdrop-filter: blur(4px);
+    z-index: 300;
+    align-items: center; justify-content: center;
+    padding: 16px;
+  }
+  .modal-overlay.show { display: flex; animation: fadeIn 0.2s; }
+  .modal {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    width: 100%; max-width: 700px;
+    max-height: 90vh; overflow-y: auto;
+    box-shadow: var(--shadow-lg);
+  }
+  .modal-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .modal-header h3 { font-size: 18px; font-weight: 700; }
+  .modal-close {
+    width: 36px; height: 36px; border-radius: 10px;
+    border: none; background: var(--bg-hover); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; color: var(--text-dim);
+  }
+  .modal-close:hover { background: var(--border); color: var(--text); }
+  .modal-body { padding: 24px; }
+  .modal-footer {
+    padding: 16px 24px;
+    border-top: 1px solid var(--border);
+    display: flex; gap: 10px; justify-content: flex-end;
+  }
+
+  /* ===== TOAST ===== */
+  .toast {
+    position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(120px);
+    background: var(--pw-navy); color: var(--pw-green);
+    padding: 14px 28px; border-radius: var(--radius);
+    font-weight: 600; font-size: 14px;
+    box-shadow: var(--shadow-lg);
+    transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    z-index: 1000; max-width: 90%;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  .toast.error { background: var(--red); color: white; }
+  .toast.success { background: var(--pw-green); color: var(--pw-navy); }
+
+  /* ===== CHARTS ===== */
+  .charts-grid { display: grid; gap: 20px; grid-template-columns: 1fr 1fr; margin-bottom: 20px; }
+  .chart-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow-sm); }
+  .chart-card h3 { font-size: 14px; font-weight: 700; margin-bottom: 14px; color: var(--text); }
+  .chart-container { position: relative; height: 250px; }
+
+  /* ===== EMPTY STATE ===== */
+  .empty-state {
+    text-align: center; padding: 60px 20px;
+    color: var(--text-dim);
+  }
+  .empty-state .empty-icon { font-size: 56px; margin-bottom: 14px; opacity: 0.4; }
+  .empty-state h4 { font-size: 16px; color: var(--text); margin-bottom: 6px; font-weight: 700; }
+  .empty-state p { font-size: 13px; }
+
+  /* ===== MOBILE ===== */
+  @media (max-width: 900px) {
+    .mobile-topbar { display: flex; }
+    .app-shell { flex-direction: column; }
+    .sidebar {
+      position: fixed; left: -260px; top: 0; z-index: 200;
+      width: 240px; height: 100vh;
+      transition: left 0.3s;
+      box-shadow: 4px 0 20px rgba(0,14,65,0.1);
+    }
+    .sidebar.open { left: 0; }
+    .main-content { padding: 20px 16px; width: 100%; }
+    .form-grid { grid-template-columns: 1fr; }
+    .client-detail-grid { grid-template-columns: 1fr; }
+    .charts-grid { grid-template-columns: 1fr; }
+    .page-title { font-size: 22px; }
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+  /* Stage progress pill */
+  .progress-pill {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 4px 12px 4px 4px;
+    background: var(--pw-mint); border-radius: 20px;
+    font-size: 11px; font-weight: 700; color: var(--pw-navy);
+  }
+  .progress-pill .pp-circle {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--pw-green); color: var(--pw-navy);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px;
+  }
+
+  /* Link styling */
+  a { color: var(--pw-green-dark); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<!-- MOBILE TOPBAR -->
+<div class="mobile-topbar">
+  <button class="mobile-menu-btn" onclick="toggleSidebar()">&#9776;</button>
+  <svg width="130" height="28" viewBox="0 0 130 28" fill="none">
+    <rect x="0" y="2" width="24" height="24" rx="6" fill="#1CE6B0"/>
+    <path d="M7 9h4.5a4 4 0 0 1 0 8H10v4H7V9z" fill="#000E41"/>
+    <path d="M10 12h1.5a1.2 1.2 0 0 1 0 2.4H10V12z" fill="#C9F9EC"/>
+    <text x="30" y="20" font-family="Roboto, sans-serif" font-weight="700" font-size="16" fill="#000E41">paywatch</text>
+    <text x="104" y="20" font-family="Roboto, sans-serif" font-weight="400" font-size="10" fill="#64748b">CRM</text>
+  </svg>
+  <button class="mobile-menu-btn" onclick="switchView('scan')">&#128247;</button>
+</div>
+<div class="mobile-drawer-overlay" id="drawer-overlay" onclick="toggleSidebar()"></div>
+
+<div class="app-shell">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <svg width="150" height="32" viewBox="0 0 150 32" fill="none">
+        <rect x="0" y="4" width="24" height="24" rx="6" fill="#1CE6B0"/>
+        <path d="M7 11h4.5a4 4 0 0 1 0 8H10v4H7V11z" fill="#000E41"/>
+        <path d="M10 14h1.5a1.2 1.2 0 0 1 0 2.4H10V14z" fill="#C9F9EC"/>
+        <text x="30" y="22" font-family="Roboto, sans-serif" font-weight="700" font-size="16" fill="#000E41">paywatch</text>
+        <text x="104" y="22" font-family="Roboto, sans-serif" font-weight="400" font-size="10" fill="#64748b">CRM</text>
+      </svg>
+    </div>
+
+    <button class="nav-item active" data-view="dashboard" onclick="switchView('dashboard')">
+      <span class="icon">&#9782;</span> Dashboard
+      <span class="badge" id="nav-alerts-count" style="display:none"></span>
+    </button>
+    <button class="nav-item" data-view="entry" onclick="switchView('entry')">
+      <span class="icon">&#43;</span> Quick Entry
+    </button>
+    <button class="nav-item" data-view="scan" onclick="switchView('scan')">
+      <span class="icon">&#128247;</span> Scan Card
+    </button>
+    <button class="nav-item" data-view="pipeline" onclick="switchView('pipeline')">
+      <span class="icon">&#9776;</span> Pipeline
+    </button>
+    <button class="nav-item" data-view="onboarding" onclick="switchView('onboarding')">
+      <span class="icon">&#10003;</span> Onboarding
+      <span class="badge" id="nav-onboarding-count" style="display:none"></span>
+    </button>
+    <button class="nav-item" data-view="contacts" onclick="switchView('contacts')">
+      <span class="icon">&#128100;</span> All Contacts
+    </button>
+    <button class="nav-item" data-view="reports" onclick="switchView('reports')">
+      <span class="icon">&#128202;</span> Reports
+    </button>
+
+    <div class="sidebar-bottom">
+      <div style="display:flex; gap:6px; margin-bottom: 8px;">
+        <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="exportAllData()" title="Backup JSON">&#128190;</button>
+        <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="document.getElementById('import-json').click()" title="Restore JSON">&#128194;</button>
+        <input type="file" id="import-json" accept=".json" style="display:none" onchange="importAllData(event)">
+      </div>
+      <div style="margin-top: 8px;">v2.0 · Data saved locally</div>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="main-content">
+
+    <!-- ===== DASHBOARD VIEW ===== -->
+    <div class="view active" id="view-dashboard">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title" id="greeting">Good morning, Dyo</h1>
+          <p class="page-subtitle" id="today-date"></p>
+        </div>
+        <div class="filter-row" style="margin-bottom: 0;">
+          <select id="dashboard-region" onchange="refreshDashboard()" class="search-box" style="padding: 10px 14px; background-image: none; width: auto;">
+            <option value="all">All regions</option>
+            <option value="bali" selected>ID Bali</option>
+            <option value="jakarta">ID Jakarta</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats-grid" id="dashboard-stats"></div>
+
+      <!-- Alerts / Reminders -->
+      <div class="alerts-grid" id="dashboard-alerts"></div>
+
+      <!-- Pipeline snapshot -->
+      <div class="card" style="margin-bottom: 24px;">
+        <div class="card-header">
+          <h3>Active Pipeline</h3>
+          <button class="btn btn-secondary btn-sm" onclick="switchView('pipeline')">Open Pipeline &rarr;</button>
+        </div>
+        <div style="padding: 14px;">
+          <div class="kanban" id="dashboard-kanban"></div>
+        </div>
+      </div>
+
+      <!-- Recent activity -->
+      <div class="card">
+        <div class="card-header"><h3>Recent Activity</h3></div>
+        <div class="card-body">
+          <div id="dashboard-activity"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== QUICK ENTRY VIEW ===== -->
+    <div class="view" id="view-entry">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Add New Contact</h1>
+          <p class="page-subtitle">Capture a lead in seconds</p>
+        </div>
+        <button class="btn btn-secondary" onclick="switchView('scan')">
+          <span>&#128247;</span> Scan Business Card Instead
+        </button>
+      </div>
+
+      <div class="card card-pad">
+        <form id="contact-form">
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Company Name *</label>
+              <input type="text" id="f-company" required placeholder="e.g. Capella Ubud" autocomplete="off">
+            </div>
+            <div class="form-group">
+              <label>Industry</label>
+              <select id="f-industry">
+                <option value="">Select industry...</option>
+                <option>Hospitality</option>
+                <option>F&B</option>
+                <option>Entertainment & Tourism</option>
+                <option>Retail</option>
+                <option>Retail & Manufacturing</option>
+                <option>Manufacturing</option>
+                <option>Garment</option>
+                <option>Business Services</option>
+                <option>Outsource</option>
+                <option>Insurance</option>
+                <option>Real Estate & Property Development</option>
+                <option>E-commerce</option>
+                <option>Transportation</option>
+                <option>Plantation</option>
+                <option>Finance</option>
+                <option>Logistic</option>
+                <option>Beauty Brand</option>
+                <option>Hospital</option>
+                <option>Catering</option>
+                <option>Distributor FMCG</option>
+                <option>Digital Agency</option>
+                <option>School</option>
+                <option>Others</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Contact Person</label>
+              <input type="text" id="f-contact" placeholder="e.g. Ade Satria">
+            </div>
+            <div class="form-group">
+              <label>Position</label>
+              <input type="text" id="f-position" placeholder="e.g. HR Director">
+            </div>
+            <div class="form-group">
+              <label>Email</label>
+              <input type="email" id="f-email" placeholder="name@company.com">
+            </div>
+            <div class="form-group">
+              <label>Phone</label>
+              <input type="tel" id="f-phone" placeholder="+62 812-3456-7890">
+            </div>
+            <div class="form-group full">
+              <label>Pipeline Stage</label>
+              <div class="stage-chips" id="stage-chips">
+                <button type="button" class="chip" data-stage="Prospect">Prospect</button>
+                <button type="button" class="chip active" data-stage="Initial Contact">Initial Contact</button>
+                <button type="button" class="chip" data-stage="Qualified Lead">Qualified Lead</button>
+                <button type="button" class="chip" data-stage="Negotiation/Under Review">Negotiation</button>
+                <button type="button" class="chip" data-stage="Awaiting Decision">Awaiting Decision</button>
+                <button type="button" class="chip" data-stage="Onboarded">Onboarded</button>
+                <button type="button" class="chip" data-stage="Lost/On Hold">Lost/On Hold</button>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Potential Eligible Users</label>
+              <input type="text" id="f-users" placeholder="e.g. 500">
+            </div>
+            <div class="form-group">
+              <label>Owner / PIC</label>
+              <select id="f-owner">
+                <option value="Dyo" selected>Dyo</option>
+                <option>Aldy</option>
+                <option>Priyadhi</option>
+                <option>Joseph</option>
+                <option>Inne</option>
+                <option>Tivanny</option>
+                <option>Riri</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Next Follow-Up Date</label>
+              <input type="date" id="f-followup">
+            </div>
+            <div class="form-group">
+              <label>Region</label>
+              <select id="f-region">
+                <option value="bali" selected>ID Bali</option>
+                <option value="jakarta">ID Jakarta</option>
+              </select>
+            </div>
+            <div class="form-group full">
+              <label>Notes</label>
+              <textarea id="f-notes" placeholder="Quick notes about this lead..."></textarea>
+            </div>
+          </div>
+          <div style="display: flex; gap: 10px; margin-top: 24px; justify-content: flex-end; flex-wrap: wrap;">
+            <button type="button" class="btn btn-secondary" onclick="clearForm()">Clear</button>
+            <button type="submit" class="btn btn-primary">
+              <span>&#10003;</span> Save Contact
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ===== SCAN CARD VIEW ===== -->
+    <div class="view" id="view-scan">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Scan Business Card</h1>
+          <p class="page-subtitle">Snap a photo, we'll extract the details</p>
+        </div>
+      </div>
+
+      <div class="scan-hero">
+        <h2>AI-Powered Card Capture</h2>
+        <p>Take a photo of a business card and we'll auto-fill the contact form using OCR</p>
+      </div>
+
+      <div class="scan-zone" id="scan-zone" onclick="document.getElementById('scan-file').click()">
+        <div class="scan-zone-icon">&#128247;</div>
+        <div class="scan-zone-label">Tap to capture or upload a business card</div>
+        <div class="scan-zone-hint">On mobile, opens your camera. On desktop, upload an image.</div>
+      </div>
+
+      <div class="scan-actions">
+        <input type="file" id="scan-file" accept="image/*" capture="environment" style="display:none" onchange="processScan(event)">
+        <button class="btn btn-primary" onclick="document.getElementById('scan-file').click()">
+          <span>&#128248;</span> Take / Upload Photo
+        </button>
+      </div>
+
+      <div class="scan-preview" id="scan-preview">
+        <img id="scan-image" src="" alt="Preview">
+        <div class="scan-progress"><div class="scan-progress-fill" id="scan-progress"></div></div>
+        <div class="scan-status" id="scan-status">Processing...</div>
+        <div class="scan-extracted" id="scan-extracted" style="display:none"></div>
+        <div style="display:flex; gap:10px; margin-top:14px; justify-content:flex-end; flex-wrap:wrap;">
+          <button class="btn btn-secondary" onclick="resetScan()">Scan Another</button>
+          <button class="btn btn-primary" id="scan-apply-btn" onclick="applyScanToForm()" style="display:none">
+            &#10003; Use This Info
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== PIPELINE VIEW ===== -->
+    <div class="view" id="view-pipeline">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Sales Pipeline</h1>
+          <p class="page-subtitle">Drag-free kanban view of active deals</p>
+        </div>
+        <div class="filter-row" style="margin: 0;">
+          <select id="pipeline-region" onchange="refreshPipeline()" class="search-box" style="padding: 10px 14px; background-image: none; width: auto;">
+            <option value="all">All regions</option>
+            <option value="bali" selected>ID Bali</option>
+            <option value="jakarta">ID Jakarta</option>
+          </select>
+          <input type="text" class="search-box" id="pipeline-search" placeholder="Search...">
+        </div>
+      </div>
+      <div class="kanban" id="full-kanban"></div>
+    </div>
+
+    <!-- ===== ONBOARDING VIEW ===== -->
+    <div class="view" id="view-onboarding">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Client Onboarding</h1>
+          <p class="page-subtitle">Track the 22-step launch process for each client</p>
+        </div>
+      </div>
+
+      <div class="filter-row">
+        <input type="text" class="search-box" id="onb-search" placeholder="Search clients..." oninput="refreshOnboardingList()">
+      </div>
+
+      <div id="onboarding-list"></div>
+    </div>
+
+    <!-- ===== CONTACTS VIEW ===== -->
+    <div class="view" id="view-contacts">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">All Contacts</h1>
+          <p class="page-subtitle" id="contacts-count"></p>
+        </div>
+        <div class="filter-row" style="margin: 0;">
+          <input type="text" class="search-box" id="contacts-search" placeholder="Search contacts...">
+          <button class="btn btn-navy btn-sm" onclick="document.getElementById('file-input').click()">&#128228; Import</button>
+          <input type="file" id="file-input" accept=".xlsx,.xls" style="display:none" onchange="handleFileImport(event)">
+          <button class="btn btn-primary btn-sm" onclick="exportToExcel()">&#128190; Export</button>
+        </div>
+      </div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th onclick="sortTable('company')">Company</th>
+              <th onclick="sortTable('industry')">Industry</th>
+              <th>Contact</th>
+              <th>Email</th>
+              <th>Phone</th>
+              <th onclick="sortTable('stage')">Stage</th>
+              <th onclick="sortTable('users')">Users</th>
+              <th onclick="sortTable('owner')">PIC</th>
+              <th>Follow-Up</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="table-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ===== CLIENT DETAIL VIEW ===== -->
+    <div class="view" id="view-client-detail">
+      <div id="client-detail-content"></div>
+    </div>
+
+    <!-- ===== REPORTS VIEW ===== -->
+    <div class="view" id="view-reports">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Reports & Analytics</h1>
+          <p class="page-subtitle">Pipeline health, onboarding progress, and export-ready reports</p>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="exportFullReport()">
+          &#128190; Export Full Report
+        </button>
+      </div>
+
+      <div class="stats-grid" id="report-stats"></div>
+      <div class="charts-grid">
+        <div class="chart-card">
+          <h3>Pipeline by Stage</h3>
+          <div class="chart-container"><canvas id="chart-stages"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h3>Pipeline by Industry</h3>
+          <div class="chart-container"><canvas id="chart-industry"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h3>Contacts by PIC</h3>
+          <div class="chart-container"><canvas id="chart-pic"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h3>Potential Users by Stage</h3>
+          <div class="chart-container"><canvas id="chart-users"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- EDIT MODAL -->
+<div class="modal-overlay" id="edit-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Edit Contact</h3>
+      <button class="modal-close" onclick="closeModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="edit-form">
+        <div class="form-grid">
+          <div class="form-group"><label>Company *</label><input type="text" id="e-company" required></div>
+          <div class="form-group"><label>Industry</label><input type="text" id="e-industry"></div>
+          <div class="form-group"><label>Contact Person</label><input type="text" id="e-contact"></div>
+          <div class="form-group"><label>Position</label><input type="text" id="e-position"></div>
+          <div class="form-group"><label>Email</label><input type="email" id="e-email"></div>
+          <div class="form-group"><label>Phone</label><input type="tel" id="e-phone"></div>
+          <div class="form-group">
+            <label>Stage</label>
+            <select id="e-stage">
+              <option>Prospect</option><option>Initial Contact</option><option>Qualified Lead</option>
+              <option>Negotiation/Under Review</option><option>Awaiting Decision</option>
+              <option>Onboarded</option><option>Lost/On Hold</option>
+            </select>
+          </div>
+          <div class="form-group"><label>Potential Users</label><input type="text" id="e-users"></div>
+          <div class="form-group"><label>Owner / PIC</label><input type="text" id="e-owner"></div>
+          <div class="form-group"><label>Follow-Up</label><input type="date" id="e-followup"></div>
+          <div class="form-group"><label>Region</label>
+            <select id="e-region"><option value="bali">ID Bali</option><option value="jakarta">ID Jakarta</option></select>
+          </div>
+          <div class="form-group full"><label>Notes</label><textarea id="e-notes"></textarea></div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger" onclick="deleteCurrentEditing()">Delete</button>
+      <div style="flex:1"></div>
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="document.getElementById('edit-form').dispatchEvent(new Event('submit', {cancelable: true}))">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ===========================================
+// PAYWATCH CRM v2.0
+// ===========================================
+
+const STORAGE_KEY = 'paywatch_crm_v2';
+
+// Onboarding checklist structure (based on ID Company Launches CHECK)
+const ONBOARDING_STEPS = [
+  { section: 'Pre-Contract', items: [
+    { key: 'creditCheck', label: 'Credit Score / Financial Report Check' },
+    { key: 'serviceAgreementSent', label: 'Service Agreement Sent' },
+    { key: 'serviceAgreementSigned', label: 'Service Agreement Signed' },
+    { key: 'rfiSent', label: 'RFI Form Sent' },
+    { key: 'rfiReceived', label: 'RFI Form Received' },
+  ]},
+  { section: 'Setup', items: [
+    { key: 'projectPlanDiscussion', label: 'Project Plan Discussion' },
+    { key: 'cutOffCalendar', label: 'Cut-Off Calendar Set' },
+    { key: 'opsInternalRequest', label: 'Ops Internal Request Submitted' },
+    { key: 'adminPortalCreated', label: 'Admin Portal Created' },
+    { key: 'whatsappGroup', label: 'WhatsApp Group with PIC Created' },
+  ]},
+  { section: 'Employee Data', items: [
+    { key: 'templateSent', label: 'Upload Template Sent to HR' },
+    { key: 'employeeMasterlist', label: 'Employee Masterlist Received' },
+    { key: 'opsTeamSweep', label: 'Ops Team Sweep/Spot Check' },
+    { key: 'employeeListUploaded', label: 'Employee List Uploaded to Portal' },
+  ]},
+  { section: 'Pre-Launch Alignment', items: [
+    { key: 'alignmentOps', label: 'Alignment Call with Internal Ops' },
+    { key: 'alignmentFinance', label: 'Alignment Call with Finance' },
+    { key: 'alignmentProduct', label: 'Alignment Call with Product' },
+    { key: 'adminPortalTraining', label: 'Admin Portal Training with HR' },
+    { key: 'testTransaction', label: 'Test Transaction Completed' },
+    { key: 'otpSignalCheck', label: 'OTP Signal Check' },
+  ]},
+  { section: 'Launch', items: [
+    { key: 'marketingMaterials', label: 'Marketing Materials Ready' },
+    { key: 'preLaunchCollaterals', label: 'Pre-Launch Collaterals Sent' },
+    { key: 'launchDay', label: 'Launch Day / Socialization' },
+    { key: 'postLaunchSupport', label: 'Post-Launch Support Active' },
+    { key: 'setupFeeBilling', label: 'Set-Up Fee Billing Sent' },
+    { key: 'csmCalendar', label: 'CSM Calendar Updated' },
+  ]},
+];
+
+// Flatten for easy iteration
+const ALL_ONBOARDING_KEYS = ONBOARDING_STEPS.flatMap(s => s.items.map(i => i.key));
+
+// ===== DATA STORE =====
+let contacts = [];
+let currentSort = { key: 'lastUpdated', dir: 'desc' };
+let editingId = null;
+let viewingClientId = null;
+let scanExtractedData = null;
+let charts = {};
+
+// ===== ID GEN =====
+function uid() { return Date.now().toString(36) + Math.random().toString(36).substr(2, 6); }
+
+// ===== STORAGE =====
+function saveData() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(contacts));
+  } catch(e) {
+    showToast('Failed to save — storage full?', 'error');
+  }
+}
+function loadData() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) contacts = JSON.parse(raw);
+  } catch(e) { contacts = []; }
+  // Ensure every contact has activity and onboarding shapes
+  contacts.forEach(c => {
+    if (!c.activity) c.activity = [];
+    if (!c.onboarding) c.onboarding = {};
+  });
+}
+
+// ===== ACTIVITY LOG =====
+function logActivity(contactId, text) {
+  const c = contacts.find(x => x.id === contactId);
+  if (!c) return;
+  if (!c.activity) c.activity = [];
+  c.activity.unshift({ date: new Date().toISOString(), text });
+  // Cap at 50 entries per contact
+  if (c.activity.length > 50) c.activity = c.activity.slice(0, 50);
+}
+
+// ===== VIEW SWITCHING =====
+function switchView(view) {
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const navItem = document.querySelector(`.nav-item[data-view="${view}"]`);
+  if (navItem) navItem.classList.add('active');
+
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-' + view).classList.add('active');
+
+  // Close mobile drawer
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('drawer-overlay').classList.remove('show');
+
+  // Refresh view
+  if (view === 'dashboard') refreshDashboard();
+  if (view === 'pipeline') refreshPipeline();
+  if (view === 'onboarding') refreshOnboardingList();
+  if (view === 'contacts') refreshTable();
+  if (view === 'reports') refreshReports();
+
+  window.scrollTo(0, 0);
+}
+
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('drawer-overlay').classList.toggle('show');
+}
+
+// ===== STAGE CHIPS =====
+document.getElementById('stage-chips').addEventListener('click', (e) => {
+  if (e.target.classList.contains('chip')) {
+    document.querySelectorAll('#stage-chips .chip').forEach(c => c.classList.remove('active'));
+    e.target.classList.add('active');
+  }
+});
+
+// ===== FORM SUBMIT =====
+document.getElementById('contact-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const activeStage = document.querySelector('#stage-chips .chip.active');
+  const contact = {
+    id: uid(),
+    company: document.getElementById('f-company').value.trim(),
+    industry: document.getElementById('f-industry').value,
+    contact: document.getElementById('f-contact').value.trim(),
+    position: document.getElementById('f-position').value.trim(),
+    email: document.getElementById('f-email').value.trim(),
+    phone: document.getElementById('f-phone').value.trim(),
+    stage: activeStage ? activeStage.dataset.stage : 'Initial Contact',
+    users: document.getElementById('f-users').value.trim(),
+    owner: document.getElementById('f-owner').value,
+    followup: document.getElementById('f-followup').value,
+    region: document.getElementById('f-region').value,
+    notes: document.getElementById('f-notes').value.trim(),
+    lastUpdated: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
+    activity: [],
+    onboarding: {}
+  };
+  contacts.unshift(contact);
+  logActivity(contact.id, `Contact created — stage: ${contact.stage}`);
+  saveData();
+  clearForm();
+  showToast('Contact saved!', 'success');
+  switchView('dashboard');
+});
+
+function clearForm() {
+  document.getElementById('contact-form').reset();
+  document.querySelectorAll('#stage-chips .chip').forEach(c => c.classList.remove('active'));
+  document.querySelector('#stage-chips .chip[data-stage="Initial Contact"]').classList.add('active');
+  document.getElementById('f-region').value = 'bali';
+  document.getElementById('f-owner').value = 'Dyo';
+  // Default follow-up 7 days out
+  const d = new Date(); d.setDate(d.getDate() + 7);
+  document.getElementById('f-followup').value = d.toISOString().split('T')[0];
+}
+
+// ===== EDIT =====
+function editContact(id, ev) {
+  if (ev) ev.stopPropagation();
+  const c = contacts.find(x => x.id === id);
+  if (!c) return;
+  editingId = id;
+  ['company','industry','contact','position','email','phone','stage','users','owner','followup','region','notes']
+    .forEach(f => { document.getElementById('e-' + f).value = c[f] || ''; });
+  document.getElementById('edit-modal').classList.add('show');
+}
+
+document.getElementById('edit-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const idx = contacts.findIndex(x => x.id === editingId);
+  if (idx === -1) return;
+  const old = contacts[idx];
+  const updated = {
+    ...old,
+    company: document.getElementById('e-company').value.trim(),
+    industry: document.getElementById('e-industry').value.trim(),
+    contact: document.getElementById('e-contact').value.trim(),
+    position: document.getElementById('e-position').value.trim(),
+    email: document.getElementById('e-email').value.trim(),
+    phone: document.getElementById('e-phone').value.trim(),
+    stage: document.getElementById('e-stage').value,
+    users: document.getElementById('e-users').value.trim(),
+    owner: document.getElementById('e-owner').value.trim(),
+    followup: document.getElementById('e-followup').value,
+    region: document.getElementById('e-region').value,
+    notes: document.getElementById('e-notes').value.trim(),
+    lastUpdated: new Date().toISOString()
+  };
+  contacts[idx] = updated;
+  if (old.stage !== updated.stage) logActivity(editingId, `Stage changed: ${old.stage} → ${updated.stage}`);
+  else logActivity(editingId, `Contact updated`);
+  saveData();
+  closeModal();
+  showToast('Saved!', 'success');
+  refreshCurrentView();
+});
+
+function deleteCurrentEditing() {
+  if (!confirm('Delete this contact permanently?')) return;
+  contacts = contacts.filter(c => c.id !== editingId);
+  saveData();
+  closeModal();
+  showToast('Deleted', 'success');
+  refreshCurrentView();
+}
+
+function closeModal() {
+  document.getElementById('edit-modal').classList.remove('show');
+  editingId = null;
+}
+
+// ===== CLIENT DETAIL =====
+function openClientDetail(id) {
+  viewingClientId = id;
+  const c = contacts.find(x => x.id === id);
+  if (!c) return;
+  const completedSteps = ALL_ONBOARDING_KEYS.filter(k => c.onboarding && c.onboarding[k] && c.onboarding[k].done).length;
+  const progress = Math.round((completedSteps / ALL_ONBOARDING_KEYS.length) * 100);
+
+  const container = document.getElementById('client-detail-content');
+  container.innerHTML = `
+    <div class="page-header">
+      <div>
+        <button class="btn btn-secondary btn-sm" onclick="switchView('dashboard')" style="margin-bottom: 10px;">&larr; Back</button>
+      </div>
+    </div>
+
+    <div class="client-header-card">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap: wrap; gap: 16px;">
+        <div>
+          <h2>${esc(c.company)}</h2>
+          <div class="meta">${esc(c.industry) || 'No industry'} · ${c.region === 'bali' ? 'ID Bali' : 'ID Jakarta'} · PIC: ${esc(c.owner) || '—'}</div>
+        </div>
+        <div>
+          <span class="stage-badge ${stageClass(c.stage)}" style="font-size: 13px; padding: 6px 14px;">${esc(c.stage)}</span>
+        </div>
+      </div>
+      <div class="client-header-actions">
+        <button class="btn btn-navy btn-sm" onclick="editContact('${c.id}')">&#9998; Edit</button>
+        ${c.phone ? `<a class="btn btn-secondary btn-sm" href="tel:${esc(c.phone)}">&#128222; Call</a>` : ''}
+        ${c.email ? `<a class="btn btn-secondary btn-sm" href="mailto:${esc(c.email)}">&#9993; Email</a>` : ''}
+        ${c.phone ? `<a class="btn btn-secondary btn-sm" href="https://wa.me/${c.phone.replace(/\D/g,'')}" target="_blank">&#128172; WhatsApp</a>` : ''}
+      </div>
+    </div>
+
+    <div class="client-detail-grid">
+      <div>
+        <div class="card" style="margin-bottom: 20px;">
+          <div class="card-header"><h3>Onboarding Progress</h3>
+            <span style="font-size:13px; font-weight:700; color:var(--pw-green-dark);">${completedSteps}/${ALL_ONBOARDING_KEYS.length} · ${progress}%</span>
+          </div>
+          <div style="padding: 16px 20px;">
+            <div class="onb-progress-bar"><div class="onb-progress-fill" style="width: ${progress}%"></div></div>
+          </div>
+          <div class="card-body" style="padding-top: 0;">
+            ${ONBOARDING_STEPS.map(section => `
+              <div class="onb-section">
+                <div class="onb-section-title">${section.section}</div>
+                ${section.items.map(item => renderOnbStep(c, item)).join('')}
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card" style="margin-bottom: 20px;">
+          <div class="card-header"><h3>Contact Info</h3></div>
+          <div class="card-body">
+            <div class="info-row"><div class="info-label">Contact</div><div class="info-value">${esc(c.contact) || '—'}</div></div>
+            <div class="info-row"><div class="info-label">Position</div><div class="info-value">${esc(c.position) || '—'}</div></div>
+            <div class="info-row"><div class="info-label">Email</div><div class="info-value">${c.email ? `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>` : '—'}</div></div>
+            <div class="info-row"><div class="info-label">Phone</div><div class="info-value">${c.phone ? `<a href="tel:${esc(c.phone)}">${esc(c.phone)}</a>` : '—'}</div></div>
+            <div class="info-row"><div class="info-label">Pot. Users</div><div class="info-value">${esc(c.users) || '—'}</div></div>
+            <div class="info-row"><div class="info-label">Follow-Up</div><div class="info-value">${c.followup ? formatDate(c.followup) : '—'}</div></div>
+            <div class="info-row"><div class="info-label">Last Update</div><div class="info-value">${formatRelative(c.lastUpdated)}</div></div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom: 20px;">
+          <div class="card-header"><h3>Notes</h3>
+            <button class="btn btn-secondary btn-sm" onclick="editContact('${c.id}')">Edit</button>
+          </div>
+          <div class="card-body" style="font-size: 14px; color: var(--text-body); white-space: pre-wrap;">
+            ${esc(c.notes) || '<em style="color:var(--text-muted)">No notes yet</em>'}
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><h3>Activity Timeline</h3></div>
+          <div class="card-body">
+            ${c.activity && c.activity.length ? `
+              <div class="timeline">
+                ${c.activity.slice(0, 20).map(a => `
+                  <div class="timeline-item">
+                    <div class="tl-date">${formatRelative(a.date)}</div>
+                    <div class="tl-text">${esc(a.text)}</div>
+                  </div>
+                `).join('')}
+              </div>` : '<div style="color:var(--text-muted); font-size: 13px;">No activity yet</div>'}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Hide nav active state, show client detail view
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-client-detail').classList.add('active');
+  window.scrollTo(0, 0);
+}
+
+function renderOnbStep(c, item) {
+  const state = (c.onboarding && c.onboarding[item.key]) || {};
+  const done = state.done;
+  return `
+    <div class="onb-step ${done ? 'done' : ''}">
+      <div class="onb-check ${done ? 'done' : ''}" onclick="toggleOnbStep('${c.id}', '${item.key}', '${esc(item.label)}')">${done ? '&#10003;' : ''}</div>
+      <div style="flex: 1;">
+        <div class="onb-label">${esc(item.label)}</div>
+        ${state.date ? `<div class="onb-meta">Completed ${formatRelative(state.date)}</div>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+function toggleOnbStep(id, key, label) {
+  const c = contacts.find(x => x.id === id);
+  if (!c) return;
+  if (!c.onboarding) c.onboarding = {};
+  const current = c.onboarding[key] || {};
+  const newDone = !current.done;
+  c.onboarding[key] = { done: newDone, date: newDone ? new Date().toISOString() : null };
+  c.lastUpdated = new Date().toISOString();
+  logActivity(id, `${newDone ? '✓ Completed' : '↺ Unchecked'}: ${label}`);
+  saveData();
+  openClientDetail(id); // re-render
+  showToast(newDone ? 'Step completed!' : 'Step unchecked', 'success');
+}
+
+// ===== DASHBOARD =====
+function refreshDashboard() {
+  const region = document.getElementById('dashboard-region').value;
+  let data = contacts;
+  if (region !== 'all') data = data.filter(c => c.region === region);
+
+  // Greeting
+  const hour = new Date().getHours();
+  const greet = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  document.getElementById('greeting').textContent = `${greet}, Dyo`;
+  document.getElementById('today-date').textContent = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+
+  // Stats
+  const total = data.length;
+  const active = data.filter(c => !['Onboarded','Lost/On Hold'].includes(c.stage)).length;
+  const onboarded = data.filter(c => c.stage === 'Onboarded').length;
+  const totalUsers = data.reduce((sum, c) => sum + (parseInt(c.users) || 0), 0);
+  const onboardingInProgress = data.filter(c => {
+    if (c.stage !== 'Onboarded') return false;
+    const done = ALL_ONBOARDING_KEYS.filter(k => c.onboarding && c.onboarding[k] && c.onboarding[k].done).length;
+    return done > 0 && done < ALL_ONBOARDING_KEYS.length;
+  }).length;
+
+  document.getElementById('dashboard-stats').innerHTML = `
+    <div class="stat-card"><div class="label">Total Leads</div><div class="value">${total}</div><div class="trend">${active} active</div></div>
+    <div class="stat-card mint"><div class="label">Onboarded Clients</div><div class="value">${onboarded}</div><div class="trend">${onboardingInProgress} in launch process</div></div>
+    <div class="stat-card yellow"><div class="label">Potential Users</div><div class="value">${totalUsers.toLocaleString()}</div><div class="trend">Across all leads</div></div>
+    <div class="stat-card navy"><div class="label">This Week</div><div class="value">${countFollowUpsThisWeek(data)}</div><div class="trend">Follow-ups due</div></div>
+  `;
+
+  // Alerts
+  const stale = getStaleLeads(data);
+  const overdue = getOverdueFollowUps(data);
+  const upcoming = getUpcomingFollowUps(data);
+  const skipped = getSkippedOnboardingSteps(data);
+
+  const totalAlerts = stale.length + overdue.length + skipped.length;
+  const navAlerts = document.getElementById('nav-alerts-count');
+  if (totalAlerts > 0) { navAlerts.style.display = 'inline-block'; navAlerts.textContent = totalAlerts; }
+  else { navAlerts.style.display = 'none'; }
+
+  const onbCount = contacts.filter(c => c.stage === 'Onboarded').length;
+  const navOnb = document.getElementById('nav-onboarding-count');
+  if (onbCount > 0) { navOnb.style.display = 'inline-block'; navOnb.textContent = onbCount; }
+  else { navOnb.style.display = 'none'; }
+
+  document.getElementById('dashboard-alerts').innerHTML = `
+    <div class="alert-card urgent">
+      <h4>&#9888; Overdue Follow-ups ${overdue.length ? `<span class="alert-count">${overdue.length}</span>` : ''}</h4>
+      ${overdue.length ? `
+        <ul class="alert-list">
+          ${overdue.slice(0, 5).map(c => `
+            <li onclick="openClientDetail('${c.id}')">
+              <span><strong>${esc(c.company)}</strong> · ${esc(c.contact)}</span>
+              <span class="alert-meta">${formatRelative(c.followup)}</span>
+            </li>`).join('')}
+        </ul>` : '<div class="alert-empty">Nothing overdue. Good job!</div>'}
+    </div>
+    <div class="alert-card">
+      <h4>&#8987; Stale Leads (14+ days) ${stale.length ? `<span class="alert-count">${stale.length}</span>` : ''}</h4>
+      ${stale.length ? `
+        <ul class="alert-list">
+          ${stale.slice(0, 5).map(c => `
+            <li onclick="openClientDetail('${c.id}')">
+              <span><strong>${esc(c.company)}</strong> · ${esc(c.stage)}</span>
+              <span class="alert-meta">${formatRelative(c.lastUpdated)}</span>
+            </li>`).join('')}
+        </ul>` : '<div class="alert-empty">All leads are fresh.</div>'}
+    </div>
+    <div class="alert-card info">
+      <h4>&#128197; Upcoming Follow-ups ${upcoming.length ? `<span class="alert-count">${upcoming.length}</span>` : ''}</h4>
+      ${upcoming.length ? `
+        <ul class="alert-list">
+          ${upcoming.slice(0, 5).map(c => `
+            <li onclick="openClientDetail('${c.id}')">
+              <span><strong>${esc(c.company)}</strong></span>
+              <span class="alert-meta">${formatDate(c.followup)}</span>
+            </li>`).join('')}
+        </ul>` : '<div class="alert-empty">No follow-ups scheduled.</div>'}
+    </div>
+    <div class="alert-card success">
+      <h4>&#10003; Onboarding Gaps ${skipped.length ? `<span class="alert-count">${skipped.length}</span>` : ''}</h4>
+      ${skipped.length ? `
+        <ul class="alert-list">
+          ${skipped.slice(0, 5).map(s => `
+            <li onclick="openClientDetail('${s.id}')">
+              <span><strong>${esc(s.company)}</strong> · ${s.missing} steps pending</span>
+              <span class="alert-meta">${s.progress}%</span>
+            </li>`).join('')}
+        </ul>` : '<div class="alert-empty">No onboarding clients yet.</div>'}
+    </div>
+  `;
+
+  // Kanban snapshot (mini)
+  renderKanban('dashboard-kanban', data, 400);
+
+  // Recent activity
+  const allActivity = [];
+  contacts.forEach(c => {
+    (c.activity || []).slice(0, 3).forEach(a => allActivity.push({ ...a, company: c.company, id: c.id }));
+  });
+  allActivity.sort((a, b) => new Date(b.date) - new Date(a.date));
+  document.getElementById('dashboard-activity').innerHTML = allActivity.length ? `
+    <div class="timeline">
+      ${allActivity.slice(0, 10).map(a => `
+        <div class="timeline-item" style="cursor:pointer;" onclick="openClientDetail('${a.id}')">
+          <div class="tl-date">${formatRelative(a.date)} · <strong>${esc(a.company)}</strong></div>
+          <div class="tl-text">${esc(a.text)}</div>
+        </div>`).join('')}
+    </div>` : '<div style="color:var(--text-muted); font-size:13px; padding: 10px 0;">No activity yet. Add your first contact to get started!</div>';
+}
+
+function countFollowUpsThisWeek(data) {
+  const now = new Date();
+  const weekOut = new Date(); weekOut.setDate(now.getDate() + 7);
+  return data.filter(c => {
+    if (!c.followup) return false;
+    const d = new Date(c.followup);
+    return d >= now && d <= weekOut;
+  }).length;
+}
+
+function getStaleLeads(data) {
+  const now = new Date();
+  return data
+    .filter(c => !['Onboarded','Lost/On Hold'].includes(c.stage))
+    .filter(c => {
+      const last = new Date(c.lastUpdated);
+      const days = (now - last) / (1000 * 60 * 60 * 24);
+      return days >= 14;
+    })
+    .sort((a, b) => new Date(a.lastUpdated) - new Date(b.lastUpdated));
+}
+
+function getOverdueFollowUps(data) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  return data
+    .filter(c => !['Onboarded','Lost/On Hold'].includes(c.stage))
+    .filter(c => c.followup && new Date(c.followup) < today)
+    .sort((a, b) => new Date(a.followup) - new Date(b.followup));
+}
+
+function getUpcomingFollowUps(data) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const weekOut = new Date(); weekOut.setDate(today.getDate() + 7);
+  return data
+    .filter(c => c.followup && new Date(c.followup) >= today && new Date(c.followup) <= weekOut)
+    .sort((a, b) => new Date(a.followup) - new Date(b.followup));
+}
+
+function getSkippedOnboardingSteps(data) {
+  return data
+    .filter(c => c.stage === 'Onboarded')
+    .map(c => {
+      const done = ALL_ONBOARDING_KEYS.filter(k => c.onboarding && c.onboarding[k] && c.onboarding[k].done).length;
+      const progress = Math.round((done / ALL_ONBOARDING_KEYS.length) * 100);
+      return { id: c.id, company: c.company, missing: ALL_ONBOARDING_KEYS.length - done, progress };
+    })
+    .filter(s => s.missing > 0)
+    .sort((a, b) => b.missing - a.missing);
+}
+
+// ===== KANBAN =====
+function renderKanban(containerId, data, maxHeight) {
+  const stages = [
+    { name: 'Prospect' }, { name: 'Initial Contact' }, { name: 'Qualified Lead' },
+    { name: 'Negotiation/Under Review' }, { name: 'Awaiting Decision' },
+    { name: 'Onboarded' }, { name: 'Lost/On Hold' }
+  ];
+  const el = document.getElementById(containerId);
+  el.innerHTML = stages.map(s => {
+    const items = data.filter(c => c.stage === s.name);
+    return `
+      <div class="kanban-col" ${maxHeight ? `style="max-height:${maxHeight}px"` : ''}>
+        <div class="kanban-col-header">
+          <span class="col-title">${s.name}</span>
+          <div class="col-meta">
+            <span class="col-count">${items.length}</span>
+          </div>
+        </div>
+        <div class="kanban-col-body">
+          ${items.length === 0 ? '<div style="text-align:center;padding:14px;color:var(--text-muted);font-size:12px;">Empty</div>' :
+            items.map(c => renderKanbanCard(c)).join('')}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function renderKanbanCard(c) {
+  const staleDays = Math.floor((new Date() - new Date(c.lastUpdated)) / (1000 * 60 * 60 * 24));
+  let staleTag = '';
+  if (staleDays >= 14 && !['Onboarded','Lost/On Hold'].includes(c.stage)) staleTag = `<span class="tag danger">${staleDays}d idle</span>`;
+  else if (staleDays >= 7 && !['Onboarded','Lost/On Hold'].includes(c.stage)) staleTag = `<span class="tag warn">${staleDays}d idle</span>`;
+
+  const followupTag = c.followup && new Date(c.followup) < new Date() && !['Onboarded','Lost/On Hold'].includes(c.stage)
+    ? `<span class="tag danger">overdue</span>` : '';
+
+  return `
+    <div class="kanban-card" onclick="openClientDetail('${c.id}')">
+      <div class="card-company">${esc(c.company)}</div>
+      <div class="card-meta">${esc(c.industry) || 'No industry'}</div>
+      <div class="card-contact">${esc(c.contact) || ''}${c.position ? ' · ' + esc(c.position) : ''}</div>
+      <div class="card-tags">
+        ${c.users ? `<span class="tag">${esc(c.users)} users</span>` : ''}
+        ${c.owner ? `<span class="tag info">${esc(c.owner)}</span>` : ''}
+        ${staleTag}
+        ${followupTag}
+      </div>
+    </div>`;
+}
+
+function refreshPipeline() {
+  const region = document.getElementById('pipeline-region').value;
+  const q = document.getElementById('pipeline-search').value.toLowerCase();
+  let data = contacts;
+  if (region !== 'all') data = data.filter(c => c.region === region);
+  if (q) data = data.filter(c =>
+    (c.company||'').toLowerCase().includes(q) ||
+    (c.contact||'').toLowerCase().includes(q) ||
+    (c.industry||'').toLowerCase().includes(q) ||
+    (c.email||'').toLowerCase().includes(q) ||
+    (c.owner||'').toLowerCase().includes(q)
+  );
+  renderKanban('full-kanban', data);
+}
+document.getElementById('pipeline-search').addEventListener('input', refreshPipeline);
+
+// ===== ONBOARDING LIST =====
+function refreshOnboardingList() {
+  const q = (document.getElementById('onb-search').value || '').toLowerCase();
+  const data = contacts
+    .filter(c => c.stage === 'Onboarded' || Object.keys(c.onboarding || {}).length > 0)
+    .filter(c => !q || (c.company||'').toLowerCase().includes(q));
+
+  const el = document.getElementById('onboarding-list');
+  if (data.length === 0) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">&#10003;</div><h4>No clients in onboarding</h4><p>Once a lead moves to "Onboarded" stage, they'll appear here with a 22-step launch checklist.</p></div>`;
+    return;
+  }
+
+  el.innerHTML = data.map(c => {
+    const done = ALL_ONBOARDING_KEYS.filter(k => c.onboarding && c.onboarding[k] && c.onboarding[k].done).length;
+    const total = ALL_ONBOARDING_KEYS.length;
+    const pct = Math.round((done / total) * 100);
+    return `
+      <div class="card" style="margin-bottom: 14px; cursor: pointer;" onclick="openClientDetail('${c.id}')">
+        <div class="card-body">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap: 16px; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 200px;">
+              <div style="font-weight:700; font-size:16px;">${esc(c.company)}</div>
+              <div style="font-size:12px; color:var(--text-dim); margin-top: 2px;">${esc(c.industry) || 'No industry'} · ${c.region === 'bali' ? 'ID Bali' : 'ID Jakarta'} · PIC: ${esc(c.owner) || '—'}</div>
+            </div>
+            <div style="flex: 1; min-width: 200px;">
+              <div class="onb-progress-bar"><div class="onb-progress-fill" style="width: ${pct}%"></div></div>
+              <div style="font-size:12px; color:var(--text-dim); margin-top: 4px; display:flex; justify-content:space-between;">
+                <span>${done} of ${total} steps complete</span>
+                <span style="font-weight: 700; color: ${pct === 100 ? '#059669' : 'var(--text)'}">${pct}%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ===== TABLE =====
+function refreshTable() {
+  let data = contacts.slice();
+  const q = (document.getElementById('contacts-search').value || '').toLowerCase();
+  if (q) data = data.filter(c =>
+    (c.company||'').toLowerCase().includes(q) ||
+    (c.contact||'').toLowerCase().includes(q) ||
+    (c.industry||'').toLowerCase().includes(q) ||
+    (c.email||'').toLowerCase().includes(q) ||
+    (c.phone||'').toLowerCase().includes(q) ||
+    (c.notes||'').toLowerCase().includes(q) ||
+    (c.owner||'').toLowerCase().includes(q)
+  );
+
+  if (currentSort.key) {
+    data.sort((a, b) => {
+      let va = (a[currentSort.key]||'').toString().toLowerCase();
+      let vb = (b[currentSort.key]||'').toString().toLowerCase();
+      if (currentSort.key === 'users') { va = parseInt(a.users)||0; vb = parseInt(b.users)||0; }
+      if (currentSort.key === 'lastUpdated') { va = new Date(a.lastUpdated); vb = new Date(b.lastUpdated); }
+      if (va < vb) return currentSort.dir === 'asc' ? -1 : 1;
+      if (va > vb) return currentSort.dir === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }
+
+  document.getElementById('contacts-count').textContent = `${data.length} of ${contacts.length} contacts`;
+  const tbody = document.getElementById('table-body');
+  if (data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--text-dim);">No contacts match your search</td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.map(c => `<tr>
+    <td style="font-weight:600; cursor:pointer;" onclick="openClientDetail('${c.id}')">${esc(c.company)}</td>
+    <td style="color:var(--pw-green-dark)">${esc(c.industry)}</td>
+    <td>${esc(c.contact)}${c.position ? `<div style="font-size:11px;color:var(--text-muted)">${esc(c.position)}</div>` : ''}</td>
+    <td>${c.email ? `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>` : ''}</td>
+    <td>${c.phone ? `<a href="tel:${esc(c.phone)}">${esc(c.phone)}</a>` : ''}</td>
+    <td><span class="stage-badge ${stageClass(c.stage)}">${esc(c.stage)}</span></td>
+    <td style="text-align:right;">${esc(c.users)}</td>
+    <td>${esc(c.owner)}</td>
+    <td style="color:var(--text-dim)">${c.followup ? formatDate(c.followup) : ''}</td>
+    <td><div class="row-actions">
+      <button class="icon-btn" onclick="openClientDetail('${c.id}')" title="View">&#128065;</button>
+      <button class="icon-btn" onclick="editContact('${c.id}', event)" title="Edit">&#9998;</button>
+    </div></td>
+  </tr>`).join('');
+}
+document.getElementById('contacts-search').addEventListener('input', refreshTable);
+
+function sortTable(key) {
+  if (currentSort.key === key) currentSort.dir = currentSort.dir === 'asc' ? 'desc' : 'asc';
+  else currentSort = { key, dir: 'asc' };
+  refreshTable();
+}
+
+// ===== REPORTS =====
+function refreshReports() {
+  const total = contacts.length;
+  const active = contacts.filter(c => !['Onboarded','Lost/On Hold'].includes(c.stage)).length;
+  const won = contacts.filter(c => c.stage === 'Onboarded').length;
+  const lost = contacts.filter(c => c.stage === 'Lost/On Hold').length;
+  const winRate = (won + lost) > 0 ? Math.round((won / (won + lost)) * 100) : 0;
+
+  document.getElementById('report-stats').innerHTML = `
+    <div class="stat-card"><div class="label">Total Contacts</div><div class="value">${total}</div></div>
+    <div class="stat-card mint"><div class="label">Active Pipeline</div><div class="value">${active}</div></div>
+    <div class="stat-card yellow"><div class="label">Win Rate</div><div class="value">${winRate}%</div><div class="trend">${won} won / ${lost} lost</div></div>
+    <div class="stat-card navy"><div class="label">Total Onboarded</div><div class="value">${won}</div></div>
+  `;
+
+  // Destroy existing charts
+  Object.values(charts).forEach(c => c && c.destroy());
+  charts = {};
+
+  const pwColors = ['#1CE6B0', '#000E41', '#FFCE00', '#C9F9EC', '#3b82f6', '#f97316', '#a855f7', '#ef4444'];
+
+  // Stages
+  const stages = ['Prospect','Initial Contact','Qualified Lead','Negotiation/Under Review','Awaiting Decision','Onboarded','Lost/On Hold'];
+  const stageCounts = stages.map(s => contacts.filter(c => c.stage === s).length);
+  charts.stages = new Chart(document.getElementById('chart-stages'), {
+    type: 'bar',
+    data: { labels: stages.map(s => s.replace('/Under Review','').replace('/On Hold','')), datasets: [{ label: 'Contacts', data: stageCounts, backgroundColor: '#1CE6B0' }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+  });
+
+  // Industry
+  const industries = {};
+  contacts.forEach(c => { if (c.industry) industries[c.industry] = (industries[c.industry] || 0) + 1; });
+  const indLabels = Object.keys(industries).slice(0, 8);
+  charts.industry = new Chart(document.getElementById('chart-industry'), {
+    type: 'doughnut',
+    data: { labels: indLabels, datasets: [{ data: indLabels.map(l => industries[l]), backgroundColor: pwColors }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { font: { size: 11 } } } } }
+  });
+
+  // PIC
+  const pics = {};
+  contacts.forEach(c => { if (c.owner) pics[c.owner] = (pics[c.owner] || 0) + 1; });
+  const picLabels = Object.keys(pics);
+  charts.pic = new Chart(document.getElementById('chart-pic'), {
+    type: 'bar',
+    data: { labels: picLabels, datasets: [{ label: 'Contacts', data: picLabels.map(l => pics[l]), backgroundColor: '#000E41' }] },
+    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+  });
+
+  // Users by stage
+  const usersStage = stages.map(s => contacts.filter(c => c.stage === s).reduce((sum, c) => sum + (parseInt(c.users) || 0), 0));
+  charts.users = new Chart(document.getElementById('chart-users'), {
+    type: 'bar',
+    data: { labels: stages.map(s => s.replace('/Under Review','').replace('/On Hold','')), datasets: [{ label: 'Potential Users', data: usersStage, backgroundColor: '#FFCE00' }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+  });
+}
+
+// ===== HELPERS =====
+function esc(str) { if (str == null) return ''; return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function stageClass(stage) {
+  if (!stage) return '';
+  const s = stage.toLowerCase();
+  if (s.includes('prospect')) return 'prospect';
+  if (s.includes('initial')) return 'initial-contact';
+  if (s.includes('qualified')) return 'qualified-lead';
+  if (s.includes('negotiation') || s.includes('review')) return 'negotiation';
+  if (s.includes('awaiting')) return 'awaiting';
+  if (s.includes('onboard')) return 'onboarded';
+  if (s.includes('lost') || s.includes('hold')) return 'lost';
+  return '';
+}
+
+function formatDate(d) {
+  if (!d) return '';
+  const date = new Date(d);
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function formatRelative(d) {
+  if (!d) return '';
+  const now = new Date();
+  const then = new Date(d);
+  const diffMs = now - then;
+  const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  const hours = Math.floor(diffMs / (1000 * 60 * 60));
+  const mins = Math.floor(diffMs / (1000 * 60));
+  if (days < -1) return 'in ' + Math.abs(days) + ' days';
+  if (days === -1 || days === 0 && then > now) return 'tomorrow';
+  if (days === 0 && hours < 1) return mins <= 1 ? 'just now' : mins + 'm ago';
+  if (days === 0) return hours + 'h ago';
+  if (days === 1) return 'yesterday';
+  if (days < 7) return days + ' days ago';
+  if (days < 30) return Math.floor(days / 7) + 'w ago';
+  return formatDate(d);
+}
+
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (type ? ' ' + type : '');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function refreshCurrentView() {
+  const active = document.querySelector('.view.active');
+  if (!active) return;
+  const id = active.id.replace('view-', '');
+  if (id === 'dashboard') refreshDashboard();
+  else if (id === 'pipeline') refreshPipeline();
+  else if (id === 'onboarding') refreshOnboardingList();
+  else if (id === 'contacts') refreshTable();
+  else if (id === 'reports') refreshReports();
+  else if (id === 'client-detail' && viewingClientId) openClientDetail(viewingClientId);
+}
+
+// ===== OCR SCANNING =====
+async function processScan(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    document.getElementById('scan-image').src = e.target.result;
+    document.getElementById('scan-preview').classList.add('show');
+    document.getElementById('scan-progress').style.width = '0%';
+    document.getElementById('scan-status').textContent = 'Loading OCR engine...';
+    document.getElementById('scan-extracted').style.display = 'none';
+    document.getElementById('scan-apply-btn').style.display = 'none';
+
+    try {
+      const worker = await Tesseract.createWorker('eng', 1, {
+        logger: m => {
+          if (m.status === 'recognizing text') {
+            const pct = Math.round(m.progress * 100);
+            document.getElementById('scan-progress').style.width = pct + '%';
+            document.getElementById('scan-status').textContent = `Reading card... ${pct}%`;
+          } else {
+            document.getElementById('scan-status').textContent = m.status;
+          }
+        }
+      });
+      const { data: { text } } = await worker.recognize(e.target.result);
+      await worker.terminate();
+
+      document.getElementById('scan-status').textContent = '✓ Done! Review extracted info below:';
+      document.getElementById('scan-extracted').style.display = 'block';
+
+      // Parse the text
+      scanExtractedData = parseBusinessCard(text);
+      document.getElementById('scan-extracted').textContent =
+        `RAW TEXT:\n${text}\n\nDETECTED:\n` +
+        `Name: ${scanExtractedData.contact || '(not found)'}\n` +
+        `Company: ${scanExtractedData.company || '(not found)'}\n` +
+        `Position: ${scanExtractedData.position || '(not found)'}\n` +
+        `Email: ${scanExtractedData.email || '(not found)'}\n` +
+        `Phone: ${scanExtractedData.phone || '(not found)'}`;
+      document.getElementById('scan-apply-btn').style.display = 'inline-flex';
+    } catch(err) {
+      document.getElementById('scan-status').textContent = 'OCR failed: ' + err.message;
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+function parseBusinessCard(text) {
+  const result = { contact: '', company: '', position: '', email: '', phone: '' };
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+  // Email
+  const emailMatch = text.match(/[\w.+-]+@[\w-]+\.[\w.-]+/);
+  if (emailMatch) result.email = emailMatch[0];
+
+  // Phone (handles Indonesian formats)
+  const phoneMatch = text.match(/(?:\+?62|0)[\s\-\.]?(?:\d[\s\-\.]?){7,13}/) ||
+                     text.match(/(?:\+?\d{1,3}[\s\-]?)?\(?\d{2,4}\)?[\s\-\.]?\d{3,4}[\s\-\.]?\d{3,5}/);
+  if (phoneMatch) result.phone = phoneMatch[0].trim();
+
+  // Position keywords
+  const positionKeywords = /\b(director|manager|officer|ceo|cfo|coo|cto|chro|vp|president|head|chief|supervisor|executive|lead|hr|human resources?|owner|founder|general manager|gm|pic|coordinator|specialist|analyst)\b/i;
+  // Company keywords
+  const companyKeywords = /\b(pt\.?|cv\.?|ltd\.?|llc|inc\.?|corp|company|group|holdings?|indonesia|hospitality|villa|resort|hotel|bali|jakarta)\b/i;
+
+  for (let line of lines) {
+    if (line === result.email || line === result.phone) continue;
+    if (/^[\d\+\s\-\(\)\.]{6,}$/.test(line)) continue; // pure phone-like line
+    if (line.includes('@')) continue;
+
+    if (!result.position && positionKeywords.test(line)) {
+      result.position = line;
+    } else if (!result.company && companyKeywords.test(line)) {
+      result.company = line;
+    } else if (!result.contact && /^[A-Z]/.test(line) && line.split(' ').length >= 2 && line.length < 50) {
+      result.contact = line;
+    }
+  }
+
+  // Fallback: first non-phone/email line = name, second = company
+  if (!result.contact && lines.length > 0) {
+    const nameLine = lines.find(l => !l.includes('@') && !/^[\d\+\s\-\(\)\.]{6,}$/.test(l));
+    if (nameLine) result.contact = nameLine;
+  }
+  if (!result.company && lines.length > 1) {
+    const candidate = lines.filter(l => l !== result.contact && l !== result.email && l !== result.phone && l !== result.position);
+    if (candidate.length > 0) result.company = candidate[0];
+  }
+
+  return result;
+}
+
+function applyScanToForm() {
+  if (!scanExtractedData) return;
+  switchView('entry');
+  if (scanExtractedData.company) document.getElementById('f-company').value = scanExtractedData.company;
+  if (scanExtractedData.contact) document.getElementById('f-contact').value = scanExtractedData.contact;
+  if (scanExtractedData.position) document.getElementById('f-position').value = scanExtractedData.position;
+  if (scanExtractedData.email) document.getElementById('f-email').value = scanExtractedData.email;
+  if (scanExtractedData.phone) document.getElementById('f-phone').value = scanExtractedData.phone;
+  showToast('Info applied — review and save!', 'success');
+  document.getElementById('f-company').focus();
+}
+
+function resetScan() {
+  document.getElementById('scan-preview').classList.remove('show');
+  document.getElementById('scan-file').value = '';
+  scanExtractedData = null;
+}
+
+// ===== EXCEL IMPORT =====
+function handleFileImport(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'array' });
+      let imported = 0;
+      wb.SheetNames.forEach(sheetName => {
+        const ws = wb.Sheets[sheetName];
+        const data = XLSX.utils.sheet_to_json(ws, { defval: '' });
+        let region = 'bali';
+        const sn = sheetName.toLowerCase();
+        if (sn.includes('jakarta') || sn.includes('jkt')) region = 'jakarta';
+        data.forEach(row => {
+          const company = (row['Company Name'] || row['Company'] || '').toString().trim();
+          if (!company || company === 'Company Name') return;
+          if (contacts.some(c => c.company.toLowerCase() === company.toLowerCase() && c.region === region)) return;
+          const c = {
+            id: uid(),
+            company,
+            industry: (row['Industry'] || '').toString().trim(),
+            contact: (row['Contact Person'] || row['Contact'] || '').toString().trim(),
+            position: (row['CP Position'] || row['Position'] || '').toString().trim(),
+            email: (row['Email'] || '').toString().trim(),
+            phone: (row['Phone'] || '').toString().trim(),
+            stage: (row['Stage'] || 'Prospect').toString().trim(),
+            users: (row['Potential Eligible Users'] || row['Users'] || '').toString().trim(),
+            owner: (row['Owner / PIC'] || row['Owner'] || row['PIC'] || '').toString().trim(),
+            followup: (row['Next Follow-Up Date'] || '').toString().trim(),
+            region,
+            notes: (row['Notes'] || '').toString().trim(),
+            lastUpdated: new Date().toISOString(),
+            createdAt: new Date().toISOString(),
+            activity: [{ date: new Date().toISOString(), text: 'Imported from Excel' }],
+            onboarding: {}
+          };
+          contacts.push(c);
+          imported++;
+        });
+      });
+      saveData();
+      refreshCurrentView();
+      showToast(`${imported} contacts imported!`, 'success');
+    } catch(err) {
+      showToast('Import failed: ' + err.message, 'error');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+  event.target.value = '';
+}
+
+// ===== EXCEL EXPORT =====
+function exportToExcel() {
+  if (contacts.length === 0) { showToast('No data to export', 'error'); return; }
+  const bali = contacts.filter(c => c.region === 'bali');
+  const jakarta = contacts.filter(c => c.region === 'jakarta');
+  const wb = XLSX.utils.book_new();
+  [{ name: 'ID Bali', data: bali }, { name: 'ID Jakarta', data: jakarta }].forEach(sheet => {
+    if (sheet.data.length === 0) return;
+    const rows = sheet.data.map(c => ({
+      'Company Name': c.company, 'Industry': c.industry, 'Contact Person': c.contact,
+      'CP Position': c.position, 'Email': c.email, 'Phone': c.phone, 'Stage': c.stage,
+      'Potential Eligible Users': c.users, 'Next Follow-Up Date': c.followup,
+      'Owner / PIC': c.owner, 'Notes': c.notes, 'Last Updated': formatDate(c.lastUpdated)
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [{wch:25},{wch:20},{wch:22},{wch:25},{wch:30},{wch:18},{wch:22},{wch:18},{wch:16},{wch:14},{wch:40},{wch:14}];
+    XLSX.utils.book_append_sheet(wb, ws, sheet.name);
+  });
+  XLSX.writeFile(wb, `Paywatch_CRM_${new Date().toISOString().split('T')[0]}.xlsx`);
+  showToast('Exported to Excel!', 'success');
+}
+
+function exportFullReport() {
+  if (contacts.length === 0) { showToast('No data yet', 'error'); return; }
+  const wb = XLSX.utils.book_new();
+
+  // Pipeline sheet
+  const pipelineRows = contacts.map(c => ({
+    'Company Name': c.company, 'Industry': c.industry, 'Contact Person': c.contact,
+    'CP Position': c.position, 'Email': c.email, 'Phone': c.phone, 'Stage': c.stage,
+    'Potential Users': c.users, 'Follow-Up': c.followup, 'PIC': c.owner,
+    'Region': c.region === 'bali' ? 'ID Bali' : 'ID Jakarta',
+    'Notes': c.notes, 'Last Updated': formatDate(c.lastUpdated)
+  }));
+  const wsP = XLSX.utils.json_to_sheet(pipelineRows);
+  wsP['!cols'] = [{wch:25},{wch:20},{wch:22},{wch:25},{wch:30},{wch:18},{wch:22},{wch:14},{wch:14},{wch:12},{wch:12},{wch:40},{wch:14}];
+  XLSX.utils.book_append_sheet(wb, wsP, 'Pipeline');
+
+  // Onboarding sheet
+  const onbRows = contacts
+    .filter(c => c.stage === 'Onboarded' || Object.keys(c.onboarding || {}).length > 0)
+    .map(c => {
+      const row = { 'Company': c.company, 'PIC': c.owner, 'Region': c.region === 'bali' ? 'ID Bali' : 'ID Jakarta' };
+      ONBOARDING_STEPS.forEach(section => {
+        section.items.forEach(item => {
+          const state = (c.onboarding || {})[item.key] || {};
+          row[item.label] = state.done ? '✓ ' + (state.date ? formatDate(state.date) : 'Done') : '—';
+        });
+      });
+      return row;
+    });
+  if (onbRows.length > 0) {
+    const wsO = XLSX.utils.json_to_sheet(onbRows);
+    XLSX.utils.book_append_sheet(wb, wsO, 'Onboarding');
+  }
+
+  // Summary sheet
+  const stages = ['Prospect','Initial Contact','Qualified Lead','Negotiation/Under Review','Awaiting Decision','Onboarded','Lost/On Hold'];
+  const summary = stages.map(s => ({
+    'Stage': s,
+    'Count': contacts.filter(c => c.stage === s).length,
+    'Total Potential Users': contacts.filter(c => c.stage === s).reduce((sum, c) => sum + (parseInt(c.users) || 0), 0)
+  }));
+  const wsS = XLSX.utils.json_to_sheet(summary);
+  XLSX.utils.book_append_sheet(wb, wsS, 'Summary');
+
+  XLSX.writeFile(wb, `Paywatch_CRM_Full_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
+  showToast('Full report exported!', 'success');
+}
+
+// ===== JSON BACKUP =====
+function exportAllData() {
+  const blob = new Blob([JSON.stringify(contacts, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `paywatch_crm_backup_${new Date().toISOString().split('T')[0]}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('Backup saved!', 'success');
+}
+
+function importAllData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!Array.isArray(data)) throw new Error('Invalid format');
+      if (!confirm(`This will REPLACE all current data with ${data.length} contacts from the backup. Continue?`)) return;
+      contacts = data;
+      saveData();
+      refreshCurrentView();
+      showToast('Restored from backup!', 'success');
+    } catch(err) {
+      showToast('Import failed: ' + err.message, 'error');
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+// ===== DRAG & DROP FOR SCAN =====
+const scanZone = document.getElementById('scan-zone');
+scanZone.addEventListener('dragover', e => { e.preventDefault(); scanZone.classList.add('dragover'); });
+scanZone.addEventListener('dragleave', () => scanZone.classList.remove('dragover'));
+scanZone.addEventListener('drop', e => {
+  e.preventDefault(); scanZone.classList.remove('dragover');
+  if (e.dataTransfer.files[0]) processScan({ target: { files: e.dataTransfer.files, value: '' } });
+});
+
+// ===== KEYBOARD SHORTCUTS =====
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeModal();
+  if (e.target.matches('input, textarea, select')) return;
+  if (e.key === 'n' && !e.metaKey && !e.ctrlKey) { switchView('entry'); setTimeout(() => document.getElementById('f-company').focus(), 100); }
+  if (e.key === 'd') switchView('dashboard');
+  if (e.key === 'p') switchView('pipeline');
+  if (e.key === 's') switchView('scan');
+});
+
+document.getElementById('edit-modal').addEventListener('click', (e) => {
+  if (e.target === document.getElementById('edit-modal')) closeModal();
+});
+
+// ===== INIT =====
+loadData();
+clearForm(); // set default values
+refreshDashboard();
+
+// Default follow-up date
+const d = new Date(); d.setDate(d.getDate() + 7);
+document.getElementById('f-followup').value = d.toISOString().split('T')[0];
+</script>
+
+</body>
+</html>
