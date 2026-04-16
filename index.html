@@ -1942,7 +1942,8 @@ async function processScan(event) {
     document.getElementById('scan-apply-btn').style.display = 'none';
 
     try {
-      const worker = await Tesseract.createWorker('eng', 1, {
+      // Use both English and Indonesian for better recognition
+      const worker = await Tesseract.createWorker(['eng','ind'], 1, {
         logger: m => {
           if (m.status === 'recognizing text') {
             const pct = Math.round(m.progress * 100);
@@ -1952,6 +1953,10 @@ async function processScan(event) {
             document.getElementById('scan-status').textContent = m.status;
           }
         }
+      });
+      // Preprocess: set whitelist of expected characters for cleaner OCR
+      await worker.setParameters({
+        tessedit_pageseg_mode: '6', // Assume a single uniform block of text
       });
       const { data: { text } } = await worker.recognize(e.target.result);
       await worker.terminate();
@@ -1978,45 +1983,178 @@ async function processScan(event) {
 
 function parseBusinessCard(text) {
   const result = { contact: '', company: '', position: '', email: '', phone: '' };
-  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
-  // Email
-  const emailMatch = text.match(/[\w.+-]+@[\w-]+\.[\w.-]+/);
-  if (emailMatch) result.email = emailMatch[0];
+  // Clean OCR artifacts: fix common misreads
+  let cleaned = text
+    .replace(/\|/g, 'l')          // pipe → l
+    .replace(/\[]/g, 'd')         // [] → d
+    .replace(/0(?=[a-z])/gi, 'O') // leading zero before letters → O
+    .replace(/[""]/g, '"')        // smart quotes
+    .replace(/\s{2,}/g, ' ');     // collapse multi-spaces
 
-  // Phone (handles Indonesian formats)
-  const phoneMatch = text.match(/(?:\+?62|0)[\s\-\.]?(?:\d[\s\-\.]?){7,13}/) ||
-                     text.match(/(?:\+?\d{1,3}[\s\-]?)?\(?\d{2,4}\)?[\s\-\.]?\d{3,4}[\s\-\.]?\d{3,5}/);
-  if (phoneMatch) result.phone = phoneMatch[0].trim();
+  const lines = cleaned.split('\n').map(l => l.trim()).filter(l => l.length > 1);
 
-  // Position keywords
-  const positionKeywords = /\b(director|manager|officer|ceo|cfo|coo|cto|chro|vp|president|head|chief|supervisor|executive|lead|hr|human resources?|owner|founder|general manager|gm|pic|coordinator|specialist|analyst)\b/i;
-  // Company keywords
-  const companyKeywords = /\b(pt\.?|cv\.?|ltd\.?|llc|inc\.?|corp|company|group|holdings?|indonesia|hospitality|villa|resort|hotel|bali|jakarta)\b/i;
+  // ===== 1. EMAIL — most reliable, anchor extraction around it =====
+  const emailPatterns = [
+    /[\w.+-]+@[\w-]+\.[\w.-]+/g,                  // standard
+    /[\w.+-]+\s*@\s*[\w-]+\s*\.\s*[\w.-]+/g,     // OCR spaces around @ and dots
+    /[\w.+-]+(?:\[at\]|{at})[\w-]+\.[\w.-]+/gi,   // [at] variant
+  ];
+  for (const pat of emailPatterns) {
+    const m = cleaned.match(pat);
+    if (m) { result.email = m[0].replace(/\s/g, ''); break; }
+  }
 
-  for (let line of lines) {
-    if (line === result.email || line === result.phone) continue;
-    if (/^[\d\+\s\-\(\)\.]{6,}$/.test(line)) continue; // pure phone-like line
-    if (line.includes('@')) continue;
-
-    if (!result.position && positionKeywords.test(line)) {
-      result.position = line;
-    } else if (!result.company && companyKeywords.test(line)) {
-      result.company = line;
-    } else if (!result.contact && /^[A-Z]/.test(line) && line.split(' ').length >= 2 && line.length < 50) {
-      result.contact = line;
+  // ===== 2. PHONE — Indonesian formats =====
+  const phonePatterns = [
+    /(?:\+\s*6\s*2|0)\s*[\d\s\-\.()]{8,16}/g,                          // +62 / 0xxx
+    /(?:\+?\d{1,3}[\s\-]?)?\(?\d{2,4}\)?[\s\-\.]?\d{3,4}[\s\-\.]?\d{3,6}/g, // international
+    /\b\d{3,4}[\s\-\.]\d{3,4}[\s\-\.]\d{3,5}\b/g,                    // grouped digits
+  ];
+  for (const pat of phonePatterns) {
+    const matches = cleaned.match(pat);
+    if (matches) {
+      // Pick the longest match (most complete number)
+      result.phone = matches.sort((a,b) => b.length - a.length)[0].trim();
+      break;
     }
   }
 
-  // Fallback: first non-phone/email line = name, second = company
-  if (!result.contact && lines.length > 0) {
-    const nameLine = lines.find(l => !l.includes('@') && !/^[\d\+\s\-\(\)\.]{6,}$/.test(l));
-    if (nameLine) result.contact = nameLine;
+  // ===== 3. Classify each line =====
+  // Score each line for: name, position, company, junk
+  const positionWords = [
+    'director','manager','officer','ceo','cfo','coo','cto','chro','cmo','cpo',
+    'vp','vice president','president','head of','chief','supervisor','executive',
+    'lead','hr','human resource','owner','founder','co-founder','general manager',
+    'gm','coordinator','specialist','analyst','asst','assistant','admin','secretary',
+    'receptionist','concierge','manajer','direktur','kepala','pimpinan','wakil',
+    'senior','junior','partner','associate','consultant','advisor','adviser',
+    'marketing','finance','sales','operations','engineering','it','legal',
+    'accounting','procurement','purchasing','training','development','hrd',
+    'people','talent','culture','engagement','recruitment','recruiter',
+    'f&b','food','beverage','room division','front office','housekeeping',
+    'revenue','reservation','spa','wellness','cluster','regional','area',
+    'country','corporate','group','division','department','branch','unit',
+    'learning','hospitality','commercial'
+  ];
+  const companyWords = [
+    'pt','pt.','cv','cv.','ltd','llc','inc','corp','corporation','company',
+    'group','holdings','holding','indonesia','international','global',
+    'hospitality','villa','resort','hotel','hotels','restaurant','beach',
+    'club','suites','residences','estate','palace','garden','spa','wellness',
+    'boutique','collection','management','services','solutions','enterprises',
+    'foundation','association','bali','jakarta','ubud','seminyak','kuta',
+    'nusa dua','sanur','canggu','jimbaran','legian','denpasar','tanah lot',
+    'industri','perusahaan','perseroan','tbk','lembaga','yayasan'
+  ];
+  const addressWords = [
+    'jl','jl.','jln','jalan','street','st.','road','rd.','avenue','ave',
+    'floor','lantai','lt.','gedung','building','tower','suite','office',
+    'blok','block','kav','no.','rt','rw','kel','kec','kab','kode pos',
+    'zip','postal','code','tel','telp','fax','phone','email','web','www',
+    'http','@','instagram','ig:','facebook','fb:','linkedin','wa:','whatsapp'
+  ];
+
+  function isJunkLine(line) {
+    const l = line.toLowerCase();
+    // Address, URL, social, pure numbers
+    if (addressWords.some(w => l.includes(w))) return true;
+    if (/^[\d\+\s\-\(\)\.\/#,]{6,}$/.test(line)) return true;
+    if (l.includes('www.') || l.includes('http') || l.includes('.com') || l.includes('.co.id')) return true;
+    if (l.includes('@')) return true;
+    return false;
   }
-  if (!result.company && lines.length > 1) {
-    const candidate = lines.filter(l => l !== result.contact && l !== result.email && l !== result.phone && l !== result.position);
-    if (candidate.length > 0) result.company = candidate[0];
+
+  function positionScore(line) {
+    const l = line.toLowerCase();
+    let score = 0;
+    positionWords.forEach(w => { if (l.includes(w)) score += 2; });
+    if (/^[A-Z][a-z]/.test(line) && line.length < 60) score += 1;
+    // Penalize if has company indicators
+    companyWords.forEach(w => { if (l.includes(w)) score -= 1; });
+    return score;
   }
+
+  function companyScore(line) {
+    const l = line.toLowerCase();
+    let score = 0;
+    companyWords.forEach(w => { if (l.includes(w)) score += 2; });
+    // ALL CAPS often = company name
+    if (line === line.toUpperCase() && line.length > 3 && /[A-Z]{3,}/.test(line)) score += 3;
+    // Penalize if has position indicators
+    positionWords.forEach(w => { if (l.includes(w)) score -= 1; });
+    return score;
+  }
+
+  function nameScore(line) {
+    const l = line.toLowerCase();
+    let score = 0;
+    // Name heuristics: Title case, 2-4 words, no special chars
+    const words = line.split(/\s+/);
+    if (words.length >= 2 && words.length <= 5) score += 2;
+    if (/^[A-Z][a-z]/.test(line)) score += 2;
+    if (line.length >= 4 && line.length <= 40) score += 1;
+    // All letters and spaces (plus Indonesian characters)
+    if (/^[A-Za-z\s\.\,\'\-]+$/.test(line)) score += 2;
+    // Indonesian honorifics
+    if (/\b(Ir|Drs?|Drg|dr|Prof|Hj|Haji|Ibu|Bpk|Bapak|S\.?[A-Z]|M\.?[A-Z]|MBA|SE|SH|ST|MM)\b/i.test(line)) score += 3;
+    // Penalize company/position/junk
+    if (positionScore(line) > 2) score -= 2;
+    if (companyScore(line) > 2) score -= 2;
+    if (isJunkLine(line)) score -= 10;
+    return score;
+  }
+
+  // Filter to candidate lines (not obviously junk/email/phone)
+  const candidates = lines.filter(l => {
+    if (isJunkLine(l) && companyScore(l) < 3 && positionScore(l) < 3) return false;
+    return true;
+  });
+
+  // Score and rank
+  const scored = candidates.map(line => ({
+    line,
+    name: nameScore(line),
+    position: positionScore(line),
+    company: companyScore(line)
+  }));
+
+  // Pick best for each category (highest score wins, min threshold)
+  const bestPosition = scored.filter(s => s.position >= 2).sort((a,b) => b.position - a.position)[0];
+  const bestCompany = scored.filter(s => s.company >= 2).sort((a,b) => b.company - a.company)[0];
+  const bestName = scored
+    .filter(s => s.name >= 3)
+    .filter(s => (!bestPosition || s.line !== bestPosition.line) && (!bestCompany || s.line !== bestCompany.line))
+    .sort((a,b) => b.name - a.name)[0];
+
+  if (bestPosition) result.position = bestPosition.line;
+  if (bestCompany) result.company = bestCompany.line;
+  if (bestName) result.contact = bestName.line;
+
+  // ===== FALLBACKS =====
+  // If no company, try ALL CAPS lines
+  if (!result.company) {
+    const capsLine = lines.find(l => l === l.toUpperCase() && l.length > 3 && /[A-Z]{3}/.test(l) && !isJunkLine(l));
+    if (capsLine) result.company = capsLine;
+  }
+  // If no name, take first non-assigned text line
+  if (!result.contact) {
+    const fallback = lines.find(l =>
+      l !== result.company && l !== result.position && !isJunkLine(l) &&
+      /^[A-Z]/.test(l) && l.split(/\s+/).length >= 2 && l.length < 50
+    );
+    if (fallback) result.contact = fallback;
+  }
+  // If no name still, just take first text-only line
+  if (!result.contact) {
+    const last = lines.find(l => l !== result.company && l !== result.position && !isJunkLine(l) && /[A-Za-z]/.test(l));
+    if (last) result.contact = last;
+  }
+
+  // Clean up: trim stray punctuation
+  ['contact','company','position'].forEach(k => {
+    result[k] = (result[k] || '').replace(/^[\s\-\|\.,:]+|[\s\-\|\.,:]+$/g, '').trim();
+  });
 
   return result;
 }
