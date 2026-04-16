@@ -754,12 +754,21 @@
     </button>
 
     <div class="sidebar-bottom">
+      <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--pw-green-dark); margin-bottom: 6px;">&#9729;&#65039; OneDrive Sync</div>
+      <div style="display:flex; gap:6px; margin-bottom: 6px;">
+        <button class="btn btn-primary btn-sm" style="flex:1; font-size:12px;" onclick="document.getElementById('sync-import').click()" title="Pull from OneDrive Excel">&#8595; Import</button>
+        <button class="btn btn-navy btn-sm" style="flex:1; font-size:12px;" onclick="exportToExcel()" title="Push to OneDrive Excel">&#8593; Export</button>
+        <input type="file" id="sync-import" accept=".xlsx,.xls" style="display:none" onchange="handleFileImport(event)">
+      </div>
+      <div style="font-size: 10px; color: var(--text-dim); line-height: 1.4; margin-bottom: 10px;">
+        Start of day: Import the OneDrive file.<br>End of day: Export and replace it.
+      </div>
       <div style="display:flex; gap:6px; margin-bottom: 8px;">
-        <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="exportAllData()" title="Backup JSON">&#128190;</button>
-        <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="document.getElementById('import-json').click()" title="Restore JSON">&#128194;</button>
+        <button class="btn btn-secondary btn-sm" style="flex:1; font-size:11px;" onclick="exportAllData()" title="JSON Backup">&#128190; Backup</button>
+        <button class="btn btn-secondary btn-sm" style="flex:1; font-size:11px;" onclick="document.getElementById('import-json').click()" title="Restore JSON">&#128194; Restore</button>
         <input type="file" id="import-json" accept=".json" style="display:none" onchange="importAllData(event)">
       </div>
-      <div style="margin-top: 8px;">v2.0 · Data saved locally</div>
+      <div style="margin-top: 8px;">v2.1 · OneDrive-ready</div>
     </div>
   </aside>
 
@@ -2031,51 +2040,260 @@ function resetScan() {
 }
 
 // ===== EXCEL IMPORT =====
+// Workbook schema (matching Paywatch CRM Workbook.xlsx):
+//   📇 Contacts  — Title row 1, blank row 2, headers row 3, data from row 4
+//     Headers: ID | Date Added | Last Updated | Company Name | Region | Industry |
+//              Contact Person | Position | Email | Phone | Eligible Universe |
+//              Stage | PIC | Source | Next Follow-up | Days Since Update |
+//              Status Flag | Notes
+//   ✅ Onboarding — Section row 3, Header row 4, data row 5+
+//     Core: Company Name | PIC | Kickoff Date | Target Launch | Progress % | Next Step
+//     Then 25 step columns (done / date text each)
+//   📝 Activity Log — Title row 1, blank row 2, Headers row 3 (Date|Company|Type|By (PIC)|Description), data row 4+
+// Legacy/simple import still supported (headers on row 1).
+
+// Mapping between HTML onboarding step keys and workbook column labels (in order).
+const WORKBOOK_ONBOARDING_COLS = [
+  { key: 'creditCheck',             label: 'Credit Score / Financial Report Check' },
+  { key: 'serviceAgreementSent',    label: 'Service Agreement Sent' },
+  { key: 'serviceAgreementSigned',  label: 'Service Agreement Signed' },
+  { key: 'rfiSent',                 label: 'RFI Form Sent' },
+  { key: 'rfiReceived',             label: 'RFI Form Received' },
+  { key: 'projectPlanDiscussion',   label: 'Project Plan Discussion' },
+  { key: 'cutOffCalendar',          label: 'Cut-Off Calendar Set' },
+  { key: 'opsInternalRequest',      label: 'Ops Internal Request' },
+  { key: 'adminPortalCreated',      label: 'Admin Portal Created' },
+  { key: 'whatsappGroup',           label: 'WhatsApp Group with PIC' },
+  { key: 'templateSent',            label: 'Upload Template Shared' },
+  { key: 'adminPortalTraining',     label: 'Portal Training (HR)' },
+  { key: 'employeeMasterlist',      label: 'Employee Masterlist Uploaded' },
+  { key: 'opsTeamSweep',            label: 'Ops Team Sweep / Spot Check' },
+  { key: 'alignmentOps',            label: 'Alignment Call: Ops' },
+  { key: 'alignmentFinance',        label: 'Alignment Call: Finance' },
+  { key: 'alignmentProduct',        label: 'Alignment Call: Product' },
+  { key: 'employeeListUploaded',    label: 'Admin Portal Training' },
+  { key: 'testTransaction',         label: 'Test Transaction' },
+  { key: 'marketingMaterials',      label: 'Marketing Materials Prep' },
+  { key: 'preLaunchCollaterals',    label: 'Pre-Launch Collaterals Sent' },
+  { key: 'otpSignalCheck',          label: 'OTP Signal Check' },
+  { key: 'launchDay',               label: 'Launch Day / Socialization' },
+  { key: 'postLaunchSupport',       label: 'Post-Launch Support & Set-up Fee' },
+  { key: 'setupFeeBilling',         label: 'Post-Launch Support & Set-up Fee' },
+  { key: 'csmCalendar',             label: 'CSM Calendar Update' },
+];
+
+// Helpers
+function _cleanCell(v) {
+  if (v === null || v === undefined) return '';
+  if (v instanceof Date) return v.toISOString().split('T')[0];
+  return v.toString().trim();
+}
+function _parseDate(v) {
+  if (!v) return '';
+  if (v instanceof Date) return v.toISOString().split('T')[0];
+  const s = v.toString().trim();
+  if (!s) return '';
+  // Excel-style serial number
+  if (/^\d+(\.\d+)?$/.test(s) && Number(s) > 20000 && Number(s) < 80000) {
+    const d = new Date(Math.round((Number(s) - 25569) * 86400 * 1000));
+    return d.toISOString().split('T')[0];
+  }
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? s : d.toISOString().split('T')[0];
+}
+function _normStage(s) {
+  const v = (s || '').toString().trim();
+  if (!v) return 'Prospect';
+  // Map legacy labels
+  const map = {
+    'new': 'Prospect',
+    'contacted': 'Initial Contact',
+    'qualified': 'Qualified Lead',
+    'negotiation': 'Negotiation/Under Review',
+    'awaiting decision': 'Awaiting Decision',
+    'won': 'Onboarded',
+    'onboarded': 'Onboarded',
+    'lost': 'Lost/On Hold',
+    'on hold': 'Lost/On Hold',
+    'rejected': 'Lost/On Hold',
+  };
+  const lower = v.toLowerCase();
+  if (map[lower]) return map[lower];
+  // Accept as-is if it matches an app stage
+  const valid = ['Prospect','Initial Contact','Qualified Lead','Negotiation/Under Review','Awaiting Decision','Onboarded','Lost/On Hold'];
+  if (valid.includes(v)) return v;
+  // Fallback matches
+  if (lower.includes('prospect')) return 'Prospect';
+  if (lower.includes('initial')) return 'Initial Contact';
+  if (lower.includes('qualified')) return 'Qualified Lead';
+  if (lower.includes('negoti') || lower.includes('review')) return 'Negotiation/Under Review';
+  if (lower.includes('await')) return 'Awaiting Decision';
+  if (lower.includes('onboard') || lower === 'won') return 'Onboarded';
+  if (lower.includes('lost') || lower.includes('hold') || lower.includes('reject')) return 'Lost/On Hold';
+  return 'Prospect';
+}
+function _normRegion(v) {
+  const s = (v || '').toString().trim().toLowerCase();
+  if (s.includes('jakarta') || s.includes('jkt')) return 'jakarta';
+  return 'bali';
+}
+
+// Convert a worksheet into an array-of-arrays (rows × columns)
+function _sheetToAOA(ws) {
+  return XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true });
+}
+
+// Detect the header row: scan first 5 rows for a row containing "Company Name" or "Company"
+function _findHeaderRow(aoa, keywords) {
+  for (let r = 0; r < Math.min(aoa.length, 6); r++) {
+    const row = aoa[r].map(c => (c || '').toString().trim().toLowerCase());
+    if (keywords.some(k => row.includes(k))) return r;
+  }
+  return 0;
+}
+
+function _rowsAfterHeader(aoa, headerIdx) {
+  const headers = aoa[headerIdx].map(h => (h || '').toString().trim());
+  const rows = [];
+  for (let r = headerIdx + 1; r < aoa.length; r++) {
+    const raw = aoa[r];
+    if (!raw || raw.every(c => c === '' || c === null || c === undefined)) continue;
+    const obj = {};
+    headers.forEach((h, i) => { if (h) obj[h] = raw[i]; });
+    rows.push(obj);
+  }
+  return { headers, rows };
+}
+
 function handleFileImport(event) {
   const file = event.target.files[0];
   if (!file) return;
+  if (!confirm('Import will MERGE new contacts from this workbook into your current data (duplicates by company name + region are skipped). Continue?')) {
+    event.target.value = '';
+    return;
+  }
   const reader = new FileReader();
   reader.onload = (e) => {
     try {
-      const wb = XLSX.read(e.target.result, { type: 'array' });
-      let imported = 0;
-      wb.SheetNames.forEach(sheetName => {
-        const ws = wb.Sheets[sheetName];
-        const data = XLSX.utils.sheet_to_json(ws, { defval: '' });
-        let region = 'bali';
-        const sn = sheetName.toLowerCase();
-        if (sn.includes('jakarta') || sn.includes('jkt')) region = 'jakarta';
-        data.forEach(row => {
-          const company = (row['Company Name'] || row['Company'] || '').toString().trim();
-          if (!company || company === 'Company Name') return;
-          if (contacts.some(c => c.company.toLowerCase() === company.toLowerCase() && c.region === region)) return;
-          const c = {
+      const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
+      let importedContacts = 0, importedOnb = 0, importedAct = 0;
+
+      // --- CONTACTS ---
+      const contactSheetName = wb.SheetNames.find(n => n.toLowerCase().includes('contact'));
+      if (contactSheetName) {
+        const ws = wb.Sheets[contactSheetName];
+        const aoa = _sheetToAOA(ws);
+        const hIdx = _findHeaderRow(aoa, ['company name', 'company']);
+        const { rows } = _rowsAfterHeader(aoa, hIdx);
+        rows.forEach(row => {
+          const company = _cleanCell(row['Company Name'] || row['Company']);
+          if (!company) return;
+          const region = _normRegion(row['Region']);
+          // Skip duplicates by company + region
+          if (contacts.some(c => (c.company||'').toLowerCase() === company.toLowerCase() && c.region === region)) return;
+          contacts.push({
             id: uid(),
             company,
-            industry: (row['Industry'] || '').toString().trim(),
-            contact: (row['Contact Person'] || row['Contact'] || '').toString().trim(),
-            position: (row['CP Position'] || row['Position'] || '').toString().trim(),
-            email: (row['Email'] || '').toString().trim(),
-            phone: (row['Phone'] || '').toString().trim(),
-            stage: (row['Stage'] || 'Prospect').toString().trim(),
-            users: (row['Potential Eligible Users'] || row['Users'] || '').toString().trim(),
-            owner: (row['Owner / PIC'] || row['Owner'] || row['PIC'] || '').toString().trim(),
-            followup: (row['Next Follow-Up Date'] || '').toString().trim(),
+            industry: _cleanCell(row['Industry']),
+            contact:  _cleanCell(row['Contact Person'] || row['Contact']),
+            position: _cleanCell(row['Position'] || row['CP Position']),
+            email:    _cleanCell(row['Email']),
+            phone:    _cleanCell(row['Phone']),
+            stage:    _normStage(row['Stage']),
+            users:    _cleanCell(row['Eligible Universe'] || row['Potential Eligible Users'] || row['Users']),
+            owner:    _cleanCell(row['PIC'] || row['Owner / PIC'] || row['Owner']),
+            followup: _parseDate(row['Next Follow-up'] || row['Next Follow-Up Date'] || row['Follow-Up']),
+            source:   _cleanCell(row['Source']),
             region,
-            notes: (row['Notes'] || '').toString().trim(),
-            lastUpdated: new Date().toISOString(),
-            createdAt: new Date().toISOString(),
-            activity: [{ date: new Date().toISOString(), text: 'Imported from Excel' }],
+            notes:    _cleanCell(row['Notes']),
+            createdAt:   _parseDate(row['Date Added']) ? new Date(_parseDate(row['Date Added'])).toISOString() : new Date().toISOString(),
+            lastUpdated: _parseDate(row['Last Updated']) ? new Date(_parseDate(row['Last Updated'])).toISOString() : new Date().toISOString(),
+            activity: [],
             onboarding: {}
-          };
-          contacts.push(c);
-          imported++;
+          });
+          importedContacts++;
         });
-      });
+      }
+
+      // --- ONBOARDING ---
+      const onbSheetName = wb.SheetNames.find(n => n.toLowerCase().includes('onboard'));
+      if (onbSheetName) {
+        const ws = wb.Sheets[onbSheetName];
+        const aoa = _sheetToAOA(ws);
+        const hIdx = _findHeaderRow(aoa, ['company name', 'company']);
+        const { headers, rows } = _rowsAfterHeader(aoa, hIdx);
+        rows.forEach(row => {
+          const company = _cleanCell(row['Company Name'] || row['Company']);
+          if (!company) return;
+          // Find matching contact (any region)
+          let c = contacts.find(x => (x.company||'').toLowerCase() === company.toLowerCase());
+          if (!c) {
+            // Create a placeholder contact so we don't drop onboarding data
+            c = {
+              id: uid(), company, industry: '', contact: '', position: '',
+              email: '', phone: '', stage: 'Onboarded',
+              users: '', owner: _cleanCell(row['PIC']), followup: '', source: '',
+              region: 'bali', notes: '',
+              createdAt: new Date().toISOString(), lastUpdated: new Date().toISOString(),
+              activity: [], onboarding: {}
+            };
+            contacts.push(c);
+          }
+          if (!c.onboarding) c.onboarding = {};
+          // For each step label, look up by label in the row; take first match per key
+          WORKBOOK_ONBOARDING_COLS.forEach(col => {
+            if (c.onboarding[col.key] && c.onboarding[col.key].done) return; // don't overwrite already-done
+            const val = _cleanCell(row[col.label]);
+            if (!val) return;
+            // Parse "✓ 2026-03-01" format or just "✓ Done"
+            const done = val.startsWith('✓') || val.toLowerCase() === 'done' || val.toLowerCase() === 'yes' || val.toLowerCase() === 'true';
+            const dateMatch = val.match(/\d{4}-\d{2}-\d{2}/);
+            if (done || dateMatch) {
+              c.onboarding[col.key] = { done: true, date: dateMatch ? dateMatch[0] : '' };
+              importedOnb++;
+            }
+          });
+          if (c.stage !== 'Onboarded' && Object.keys(c.onboarding).length > 0) {
+            // Leave stage alone — user may still be in onboarding
+          }
+        });
+      }
+
+      // --- ACTIVITY LOG ---
+      const actSheetName = wb.SheetNames.find(n => n.toLowerCase().includes('activity'));
+      if (actSheetName) {
+        const ws = wb.Sheets[actSheetName];
+        const aoa = _sheetToAOA(ws);
+        const hIdx = _findHeaderRow(aoa, ['company', 'date']);
+        const { rows } = _rowsAfterHeader(aoa, hIdx);
+        rows.forEach(row => {
+          const company = _cleanCell(row['Company']);
+          const desc = _cleanCell(row['Description']);
+          const when = _parseDate(row['Date']);
+          if (!company || !desc) return;
+          const c = contacts.find(x => (x.company||'').toLowerCase() === company.toLowerCase());
+          if (!c) return;
+          if (!c.activity) c.activity = [];
+          const isoDate = when ? new Date(when).toISOString() : new Date().toISOString();
+          // Dedup: skip if same date+text already present
+          if (c.activity.some(a => a.date.split('T')[0] === isoDate.split('T')[0] && a.text === desc)) return;
+          c.activity.push({ date: isoDate, text: desc });
+          importedAct++;
+        });
+        // Sort activity newest-first and cap
+        contacts.forEach(c => {
+          if (c.activity) {
+            c.activity.sort((a,b) => b.date.localeCompare(a.date));
+            if (c.activity.length > 50) c.activity = c.activity.slice(0, 50);
+          }
+        });
+      }
+
       saveData();
       refreshCurrentView();
-      showToast(`${imported} contacts imported!`, 'success');
+      showToast(`Imported: ${importedContacts} contacts · ${importedOnb} onboarding steps · ${importedAct} activities`, 'success');
     } catch(err) {
+      console.error(err);
       showToast('Import failed: ' + err.message, 'error');
     }
   };
@@ -2084,25 +2302,145 @@ function handleFileImport(event) {
 }
 
 // ===== EXCEL EXPORT =====
+// Writes a workbook matching the OneDrive "Paywatch CRM Workbook.xlsx" schema:
+//   📇 Contacts · ✅ Onboarding · 📝 Activity Log
+// Drop the exported file into your OneDrive, replacing the existing workbook.
 function exportToExcel() {
   if (contacts.length === 0) { showToast('No data to export', 'error'); return; }
-  const bali = contacts.filter(c => c.region === 'bali');
-  const jakarta = contacts.filter(c => c.region === 'jakarta');
   const wb = XLSX.utils.book_new();
-  [{ name: 'ID Bali', data: bali }, { name: 'ID Jakarta', data: jakarta }].forEach(sheet => {
-    if (sheet.data.length === 0) return;
-    const rows = sheet.data.map(c => ({
-      'Company Name': c.company, 'Industry': c.industry, 'Contact Person': c.contact,
-      'CP Position': c.position, 'Email': c.email, 'Phone': c.phone, 'Stage': c.stage,
-      'Potential Eligible Users': c.users, 'Next Follow-Up Date': c.followup,
-      'Owner / PIC': c.owner, 'Notes': c.notes, 'Last Updated': formatDate(c.lastUpdated)
-    }));
-    const ws = XLSX.utils.json_to_sheet(rows);
-    ws['!cols'] = [{wch:25},{wch:20},{wch:22},{wch:25},{wch:30},{wch:18},{wch:22},{wch:18},{wch:16},{wch:14},{wch:40},{wch:14}];
-    XLSX.utils.book_append_sheet(wb, ws, sheet.name);
+
+  const today = () => new Date().toISOString().split('T')[0];
+  const dateOnly = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    return d.toISOString().split('T')[0];
+  };
+  const regionLabel = (r) => r === 'jakarta' ? 'Jakarta' : 'Bali';
+
+  // ---------- 📇 CONTACTS ----------
+  const contactHeaders = [
+    'ID','Date Added','Last Updated','Company Name','Region','Industry',
+    'Contact Person','Position','Email','Phone','Eligible Universe',
+    'Stage','PIC','Source','Next Follow-up','Days Since Update',
+    'Status Flag','Notes'
+  ];
+  const contactAOA = [];
+  contactAOA.push(['Contacts — Master Lead Database']);
+  contactAOA.push([]);
+  contactAOA.push(contactHeaders);
+  contacts.forEach((c, i) => {
+    const daysSince = c.lastUpdated ? Math.floor((Date.now() - new Date(c.lastUpdated).getTime()) / 86400000) : '';
+    const statusFlag = c.stage === 'Lost/On Hold' ? 'On Hold'
+                     : c.stage === 'Onboarded' ? 'Active Client'
+                     : (c.followup && new Date(c.followup) < new Date()) ? '⚠ Overdue Follow-up'
+                     : (daysSince > 14 ? '⚠ Stale (>14d)' : daysSince > 7 ? '🟡 Review' : '✅ Active');
+    contactAOA.push([
+      'A' + String(i+1).padStart(4,'0'),
+      dateOnly(c.createdAt),
+      dateOnly(c.lastUpdated),
+      c.company || '',
+      regionLabel(c.region),
+      c.industry || '',
+      c.contact || '',
+      c.position || '',
+      c.email || '',
+      c.phone || '',
+      c.users || '',
+      c.stage || '',
+      c.owner || '',
+      c.source || '',
+      c.followup || '',
+      daysSince,
+      statusFlag,
+      c.notes || ''
+    ]);
   });
-  XLSX.writeFile(wb, `Paywatch_CRM_${new Date().toISOString().split('T')[0]}.xlsx`);
-  showToast('Exported to Excel!', 'success');
+  const wsC = XLSX.utils.aoa_to_sheet(contactAOA);
+  wsC['!cols'] = [{wch:8},{wch:12},{wch:12},{wch:30},{wch:10},{wch:18},{wch:22},{wch:22},{wch:28},{wch:18},{wch:14},{wch:22},{wch:10},{wch:16},{wch:14},{wch:8},{wch:20},{wch:50}];
+  wsC['!freeze'] = { xSplit: 0, ySplit: 3 };
+  XLSX.utils.book_append_sheet(wb, wsC, '📇 Contacts');
+
+  // ---------- ✅ ONBOARDING ----------
+  const onbCoreHeaders = ['Company Name','PIC','Kickoff Date','Target Launch','Progress %','Next Step'];
+  // Build 25-step header list from WORKBOOK_ONBOARDING_COLS (dedup labels in order)
+  const stepLabels = [];
+  const seenLabels = new Set();
+  WORKBOOK_ONBOARDING_COLS.forEach(col => {
+    if (!seenLabels.has(col.label)) { stepLabels.push(col.label); seenLabels.add(col.label); }
+  });
+  const onbHeaders = [...onbCoreHeaders, ...stepLabels];
+  const onbAOA = [];
+  onbAOA.push(['Onboarding — 25-Step Client Launch Checklist']);
+  onbAOA.push([]);
+  onbAOA.push(onbHeaders);
+  contacts
+    .filter(c => c.stage === 'Onboarded' || Object.keys(c.onboarding || {}).length > 0)
+    .forEach(c => {
+      const onb = c.onboarding || {};
+      const doneCount = ALL_ONBOARDING_KEYS.filter(k => onb[k] && onb[k].done).length;
+      const progress = ALL_ONBOARDING_KEYS.length > 0 ? Math.round(doneCount / ALL_ONBOARDING_KEYS.length * 100) : 0;
+      // Next step = first incomplete step in order
+      const firstIncomplete = ONBOARDING_STEPS.flatMap(s => s.items).find(it => !onb[it.key] || !onb[it.key].done);
+      const nextStep = firstIncomplete ? firstIncomplete.label : (progress === 100 ? '✅ Complete' : '');
+      const row = [
+        c.company || '',
+        c.owner || '',
+        '', // Kickoff Date — manual
+        '', // Target Launch — manual
+        progress + '%',
+        nextStep
+      ];
+      stepLabels.forEach(label => {
+        // Find all keys matching this label (handles the merged "Post-Launch Support & Set-up Fee")
+        const matchingKeys = WORKBOOK_ONBOARDING_COLS.filter(col => col.label === label).map(col => col.key);
+        const doneEntry = matchingKeys.map(k => onb[k]).find(v => v && v.done);
+        if (doneEntry) {
+          row.push(doneEntry.date ? '✓ ' + doneEntry.date : '✓ Done');
+        } else {
+          row.push('—');
+        }
+      });
+      onbAOA.push(row);
+    });
+  const wsO = XLSX.utils.aoa_to_sheet(onbAOA);
+  wsO['!cols'] = [{wch:28},{wch:10},{wch:12},{wch:12},{wch:10},{wch:28},...stepLabels.map(() => ({wch:18}))];
+  wsO['!freeze'] = { xSplit: 1, ySplit: 3 };
+  XLSX.utils.book_append_sheet(wb, wsO, '✅ Onboarding');
+
+  // ---------- 📝 ACTIVITY LOG ----------
+  const actAOA = [];
+  actAOA.push(['Activity Log — Every Touchpoint']);
+  actAOA.push([]);
+  actAOA.push(['Date','Company','Type','By (PIC)','Description']);
+  const allActivity = [];
+  contacts.forEach(c => {
+    (c.activity || []).forEach(a => {
+      allActivity.push({
+        date: a.date,
+        company: c.company,
+        pic: c.owner,
+        text: a.text
+      });
+    });
+  });
+  allActivity.sort((a,b) => b.date.localeCompare(a.date));
+  allActivity.forEach(a => {
+    actAOA.push([
+      dateOnly(a.date),
+      a.company,
+      '', // Type — not tracked in app yet
+      a.pic || '',
+      a.text
+    ]);
+  });
+  const wsA = XLSX.utils.aoa_to_sheet(actAOA);
+  wsA['!cols'] = [{wch:12},{wch:28},{wch:14},{wch:10},{wch:60}];
+  wsA['!freeze'] = { xSplit: 0, ySplit: 3 };
+  XLSX.utils.book_append_sheet(wb, wsA, '📝 Activity Log');
+
+  XLSX.writeFile(wb, 'Paywatch CRM Workbook.xlsx');
+  showToast(`Exported ${contacts.length} contacts · upload to OneDrive`, 'success');
 }
 
 function exportFullReport() {
